@@ -90,7 +90,10 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 
 /* 검색 줄: 입력창 + 오른쪽 검색 버튼 */
 [data-testid="stForm"]{ border:none !important; padding:0 !important; }
+.st-key-searchrow, .st-key-searchrow [data-testid="stForm"],
+.st-key-searchrow [data-testid="stHorizontalBlock"]{ width:100% !important; }
 .st-key-searchrow [data-testid="stHorizontalBlock"]{ align-items:center; }
+.st-key-searchrow .stTextInput{ width:100% !important; }
 .stTextInput [data-baseweb="input"]{
   height:52px; border:none !important; border-radius:12px;
   background:var(--bg) !important; box-shadow:none !important;
@@ -103,7 +106,10 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .stTextInput input::placeholder{ color:#A3ABB5; }
 .stTextInput [data-baseweb="input"]:focus-within{ box-shadow:inset 0 0 0 1.5px #C4CAD1 !important; }
-.st-key-searchrow .stFormSubmitButton > button{ min-height:52px; height:52px; font-size:15px; padding:0 6px; }
+.st-key-searchrow .stFormSubmitButton{ width:100% !important; }
+.st-key-searchrow .stFormSubmitButton > button{
+  width:100% !important; min-height:52px; height:52px; font-size:16px; padding:0 8px; white-space:nowrap;
+}
 
 /* 상단바: 아이콘과 글씨를 한 버튼에 넣어 정렬 */
 .st-key-topbar{ position:sticky; top:0; z-index:50; background:#fff; padding:10px 0 6px; }
@@ -165,6 +171,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 
 /* 업로드 박스 */
 [class*="st-key-upwrap"]{ margin-top:4px; }
+.st-key-upwrap{ margin-top:12px; }
 [class*="st-key-upwrap"] [data-testid="stFileUploaderDropzone"]{
   position:relative; min-height:60px; border:1.5px dashed #CDD2D8; background:var(--bg);
   border-radius:14px; display:flex; align-items:center; justify-content:center; padding:0;
@@ -184,9 +191,9 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 [class*="st-key-chip_"]{ position:relative; gap:0 !important; }
 .chip img{ width:100%; aspect-ratio:1; object-fit:cover; display:block;
   border-radius:10px; border:1px solid var(--line); background:var(--bg); }
-.chip .n{ font-size:11px; font-weight:600; color:var(--ink); margin-top:4px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.chip .s{ font-size:10px; color:var(--mute); }
+.chip .n{ font-size:11px; font-weight:600; color:var(--ink); margin-top:4px; line-height:1.2;
+  letter-spacing:-0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chip .s{ font-size:10px; color:var(--mute); line-height:1.2; margin-top:1px; letter-spacing:-0.01em; }
 [class*="st-key-rm_"]{ position:absolute !important; top:4px; right:4px; width:auto !important; z-index:5; }
 [class*="st-key-rm_"] .stButton{ width:auto; }
 [class*="st-key-rm_"] .stButton > button{
@@ -197,10 +204,12 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 
 /* 성분 비교 (빨간 테두리, 조금 더 짧게) */
 .st-key-btn_compare{ margin-top:6px; }
-.st-key-btn_compare .stButton{ display:flex; justify-content:center; }
+.st-key-btn_compare, .st-key-btn_compare .stButton{ width:100% !important; display:flex; justify-content:center; }
 .st-key-btn_compare .stButton > button{
-  width:80%; border:1.5px solid var(--red) !important; color:var(--red) !important; background:#fff;
+  width:86% !important; min-width:220px; white-space:nowrap;
+  border:1.5px solid var(--red) !important; color:var(--red) !important; background:#fff;
 }
+.st-key-btn_compare button p{ white-space:nowrap; }
 
 /* 분석 중 */
 .analyzing{ min-height:calc(100dvh - 40px); display:flex; flex-direction:column;
@@ -274,11 +283,18 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:rgba(255,255,255,.96); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   border-top:1px solid var(--line); padding:4px 12px calc(4px + env(safe-area-inset-bottom)); z-index:100;
 }
-.st-key-bottomnav .stButton > button{
-  border:none !important; background:transparent !important; color:var(--mute) !important;
-  min-height:54px; font-size:12px; font-weight:600;
+.st-key-bottomnav [data-testid="stHorizontalBlock"]{ width:100% !important; gap:0 !important; }
+.st-key-bottomnav [data-testid="stColumn"], .st-key-bottomnav [data-testid="column"]{
+  flex:1 1 0 !important; width:33.333% !important; display:flex; justify-content:center;
 }
-.st-key-bottomnav button > div{ flex-direction:column !important; gap:1px; }
+.st-key-bottomnav .stButton{ width:100% !important; display:flex; justify-content:center; }
+.st-key-bottomnav .stButton > button{
+  width:100% !important; justify-content:center; text-align:center;
+  border:none !important; background:transparent !important; color:var(--mute) !important;
+  min-height:54px; font-size:12px; font-weight:600; padding:0;
+}
+.st-key-bottomnav button > div{ flex-direction:column !important; align-items:center !important; justify-content:center !important; gap:1px; width:100%; }
+.st-key-bottomnav button p{ text-align:center; margin:0; }
 .st-key-bottomnav [data-testid="stIconMaterial"]{ font-size:24px; }
 .st-key-bottomnav [data-testid="stBaseButton-primary"]{ color:var(--red) !important; }
 
@@ -437,6 +453,11 @@ except Exception as e:
     st.stop()
 
 
+def has_code(code):
+    """품목기준코드가 비었거나 null 계열이면 False"""
+    return str(code).strip().lower() not in ("", "nan", "null", "none", "-", "0")
+
+
 def to_rec(row):
     return {"name": row[NAME], "ingredient": row[ING], "manufacturer": row[MANUF], "code": row[CODE]}
 
@@ -548,7 +569,7 @@ def evaluate(drug, lines):
         per.append({"name": g[0], "score": best[0],
                     "found": original_line(best[1]) if best[0] >= 0.6 else ""})
 
-    code = re.sub(r"\D", "", drug["code"])
+    code = re.sub(r"\D", "", drug["code"]) if has_code(drug["code"]) else ""
     code_ok = len(code) >= 6 and code in digit_stream(full)
 
     mn = normalize_company(drug["manufacturer"])
@@ -747,7 +768,7 @@ def page_home():
     applied = ss.applied
     with st.container(key="searchrow"):
         with st.form("search_form", border=False):
-            c1, c2 = st.columns([3, 1.1], vertical_alignment="center")
+            c1, c2 = st.columns([2.7, 1.3], vertical_alignment="center")
             with c1:
                 st.text_input("약품명", key="q", placeholder="검색할 약품명을 입력하세요",
                               label_visibility="collapsed")
@@ -763,7 +784,8 @@ def page_home():
             '<div class="applied"><span class="tag">적용되었습니다</span>'
             '<div class="nm">' + esc(applied["name"]) + "</div>"
             '<div class="meta">주성분 ' + esc(applied["ingredient"] or "-") + "<br>"
-            + esc(applied["manufacturer"] or "-") + " · 품목기준코드 " + esc(applied["code"] or "-")
+            + esc(applied["manufacturer"] or "-")
+            + (" · 품목기준코드 " + esc(applied["code"]) if has_code(applied["code"]) else "")
             + "</div></div>",
             unsafe_allow_html=True,
         )
@@ -922,9 +944,11 @@ def page_report():
     def tag(ok, yes="일치", no="불일치"):
         return '<span class="%s">%s</span>' % ("ok" if ok else "bad", yes if ok else no)
 
-    rows = [("품목기준코드", esc(d["code"] or "-"),
-             esc(d["code"]) if r["code_ok"] else "미검출",
-             tag(r["code_ok"], "일치", "확인 필요"))]
+    rows = []
+    if has_code(d["code"]):
+        rows.append(("품목기준코드", esc(d["code"]),
+                     esc(d["code"]) if r["code_ok"] else "미검출",
+                     tag(r["code_ok"], "일치", "확인 필요")))
     per_list = r["per"] or [{"name": "-", "score": 0, "found": ""}]
     for i, p in enumerate(per_list):
         label = "주성분명" if len(r["per"]) <= 1 else "주성분 %d" % (i + 1)
