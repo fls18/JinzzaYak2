@@ -88,25 +88,25 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:var(--red-d) !important; color:#fff !important;
 }
 
-/* 검색 폼 영역 정렬 */
+/* 검색 폼 전체 영역 */
 [data-testid="stForm"]{ 
     border: none !important; 
     padding: 0 !important; 
 }
 
-/* 검색창과 버튼을 감싸는 블록을 가로로 정렬하고 높이 맞추기 */
+/* 검색창과 버튼을 감싸는 블록: 간격(gap) 조절 가능 */
 .st-key-searchrow [data-testid="stHorizontalBlock"]{ 
     display: flex !important;
-    align-items: flex-end !important; /* 아래쪽 라인에 딱 맞춤 */
-    gap: 8px !important;
+    align-items: center !important; 
+    gap: 12px !important; /* 회색박스와 빨간버튼 사이 간격 */
 }
 
-/* 입력창 크기 및 스타일 */
+/* 회색 입력창(텍스트박스) 길이와 높이 맞춤 */
 .stTextInput {
     width: 100% !important;
 }
 .stTextInput [data-baseweb="input"]{
-    height: 52px !important; 
+    height: 46px !important; /* 위아래 높이를 슬림하게 조절 */
     border: 1.5px solid var(--line) !important; 
     border-radius: 12px !important;
     background: #fff !important; 
@@ -118,7 +118,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     border-color: var(--ink) !important; 
 }
 .stTextInput input{
-    font-size: 16px !important; 
+    font-size: 15px !important; 
     color: var(--ink) !important; 
     padding: 0 14px !important;
     background: transparent !important; 
@@ -127,14 +127,14 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .stTextInput input::placeholder{ color: #B0B8C1 !important; }
 
-/* 오른쪽 빨간색 검색 버튼 높이와 모양 맞추기 */
+/* 오른쪽 빨간색 검색 버튼: 회색 박스와 높이(46px)를 정확히 일치시킴 */
 .st-key-searchrow .stFormSubmitButton {
     width: auto !important;
 }
 .st-key-searchrow .stFormSubmitButton > button{
-    width: 80px !important; /* 버튼 가로폭 고정 */
-    min-height: 52px !important; 
-    height: 52px !important; 
+    width: 88px !important; /* 버튼 가로 폭 */
+    min-height: 46px !important; 
+    height: 46px !important; 
     border-radius: 12px !important;
     font-size: 15px !important; 
     font-weight: 600 !important;
