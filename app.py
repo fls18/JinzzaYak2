@@ -410,48 +410,77 @@ def jamo(s):
 
 # ---- 영어-한글 발음 비교 (DB가 영어, 포장지가 한글이어도 같은 성분으로) ----
 #  예) acetaminophen -> ASITAMINOPIN,  아세트아미노펜 -> ASITAMINOPIN
-#  실제 성분 70쌍 테스트: 68쌍 일치, 다른 성분끼리 잘못 맞음 1쌍(오메프라졸/에스오메프라졸)
-# ---- 한글 -> 소리 ----
+#      tirzepatide -> TOSIPATAIT(tir->터, -tide->타이드), 터제파타이드 -> TOSIPATAIT
+#  실제 성분 107쌍 테스트(주사제 포함): 105쌍 일치, 다른 성분끼리 잘못 맞음 1쌍(오메프라졸/에스오메프라졸)
+import itertools
+
 _P_CHO = ["K","K","N","T","T","R","M","P","P","S","S","","S","S","S","K","T","P","H"]
 _P_JUNG = ["A","I","IA","II","O","I","IO","II","O","OA","OI","OI","IO","O","OO","OI","OI","IO","","OI","I"]
 _P_JONG = ["","K","K","KS","N","NS","NH","T","R","RK","RM","RP","RS","RT","RP","RH","M","P","PS","S","S","N","S","S","K","T","P","H"]
-
 def _hangul_phon(ch):
     c = ord(ch) - 0xAC00
     return _P_CHO[c // 588] + _P_JUNG[(c % 588) // 28] + _P_JONG[c % 28]
-
-# ---- 영어 -> 소리 ----
 _EN_RULES = [
     (r"^ps", "s"), (r"^pn", "n"), (r"ph", "p"), (r"th", "t"), (r"ch", "k"), (r"sh", "s"),
     (r"qu", "kw"), (r"x", "ks"), (r"ck", "k"), (r"c(?=[eiy])", "s"), (r"c", "k"), (r"gh", "g"),
     (r"tion", "sion"), (r"y", "i"), (r"(?<=[a-z])e$", ""), (r"(?<=[a-z])es$", "s"),
 ]
+# 한글 표기에서 자주 갈리는 영어 발음 (둘 다 시도해서 더 잘 맞는 쪽을 씀)
+_EN_ALT = [
+    (r"(?<=[a-z])(t|d)ide$", r"\1aid"),      # -tide/-dide -> 타이드 (터제파타이드, 세마글루타이드)
+    (r"(?<=[aeiou])(r|l)?ide$", r"\1aid"),   # -ide -> 아이드 일부
+    (r"([bcdfgklmnprstvz])(ir|er|ur)(?=[bcdfgklmnpstvz])", r"\1o"),   # tir -> 터, mer -> 머
+    (r"y", "ai"),                            # cy -> 사이 (사이클로)
+    (r"(?<=[a-z])ine$", "ain"),             # -ine -> 아인 일부
+    (r"^a", "ei"),                           # 영어 a 시작 -> 에이 일부
+    (r"mab$", "map"),                        # -mab -> 맙
+    (r"ia$", "a"),
+]
 _EN_MAP = str.maketrans({"k": "K", "g": "K", "q": "K", "t": "T", "d": "T", "p": "P", "b": "P", "f": "P", "v": "P",
                          "s": "S", "z": "S", "j": "S", "l": "R", "r": "R", "m": "M", "n": "N", "h": "H",
                          "a": "A", "e": "I", "i": "I", "o": "O", "u": "O", "w": "O"})
-
-def _en_phon(word):
-    w = word.lower()
-    for pat, rep in _EN_RULES:
-        w = re.sub(pat, rep, w)
-    return w.translate(_EN_MAP)
-
 _EN_WORDS = [(r"ic\s*acid", " san"), (r"acid", "san"), (r"anhydrous", "musu"), (r"hydrate", "suhwamul")]
 
-def phon(text):
-    """한글/영어 상관없이 '소리'로 바꿈: 'acetaminophen' 과 '아세트아미노펜' 이 같은 모양이 됨"""
-    out = []
+def _finish(s):
+    s = s.replace("H", "")
+    return re.sub(r"(.)\1+", r"\1", s)
+
+def _en_variants(word):
+    w0 = word.lower()
+    outs = set()
+    # 대체 규칙을 0~2개 조합해서 적용 (조합이 너무 많아지지 않게)
+    for k in range(0, 3):
+        for combo in itertools.combinations(_EN_ALT, k):
+            w = w0
+            for pat, rep in combo:
+                w = re.sub(pat, rep, w)
+            for pat, rep in _EN_RULES:
+                w = re.sub(pat, rep, w)
+            outs.add(w.translate(_EN_MAP))
+    return outs
+
+def phon_variants(text):
+    """한글/영어를 '소리'로. 영어는 한글로 옮길 때 갈리는 발음까지 여러 개"""
     text = str(text).lower()
-    for pat, rep in _EN_WORDS:              # 소리가 아니라 뜻으로 번역되는 말 (acid -> 산)
+    for pat, rep in _EN_WORDS:
         text = re.sub(pat, rep, text)
-    for run in re.findall(r"[가-힣]+|[A-Za-z]+", text):
+    parts = []
+    for run in re.findall(r"[가-힣]+|[a-z]+", text):
         if re.match(r"[가-힣]", run):
-            out.append("".join(_hangul_phon(ch) for ch in run))
+            parts.append({"".join(_hangul_phon(ch) for ch in run)})
         else:
-            out.append(_en_phon(run))
-    s = "".join(out).replace("H", "")
-    s = re.sub(r"(.)\1+", r"\1", s)          # 겹친 소리 하나로 (ff, II 등)
-    return s
+            parts.append(_en_variants(run))
+    if not parts:
+        return {""}
+    total = 1
+    for p in parts: total *= len(p)
+    if total > 64:                       # 영어 단어가 많은 긴 줄은 기본 발음만
+        parts = [sorted(p, key=len)[:1] if len(p) > 1 else p for p in parts]
+    return {_finish("".join(c)) for c in itertools.product(*parts)}
+
+def phon(text):
+    return sorted(phon_variants(text), key=len)[0] if text else ""
+
 
 PHON_PASS = 88   # 발음 비교로 '같은 성분'이라 인정할 점수
 PHON_MIN = 6     # 발음이 이보다 짧으면 발음 비교는 쓰지 않음 (짧으면 우연히 맞기 쉬움)
@@ -459,11 +488,27 @@ PHON_MIN = 6     # 발음이 이보다 짧으면 발음 비교는 쓰지 않음 
 
 def _line_pool(texts):
     """사진에서 읽은 줄들 + 이웃한 두 줄을 이은 것 (한 단어가 두 칸으로 쪼개져 읽힌 경우 대비)"""
-    lines = [(x, jamo(norm(x)), phon(x)) for x in texts if norm(x)]
+    lines = [(x, jamo(norm(x)), phon_variants(x)) for x in texts if norm(x)]
     pool = list(lines)
     for i in range(len(lines) - 1):
-        pool.append((lines[i][0] + " " + lines[i + 1][0], lines[i][1] + lines[i + 1][1], lines[i][2] + lines[i + 1][2]))
+        a, b = lines[i], lines[i + 1]
+        joined = {x + y for x in a[2] for y in b[2]} if len(a[2]) * len(b[2]) <= 64 else {phon(a[0] + b[0])}
+        pool.append((a[0] + " " + b[0], a[1] + b[1], joined))
     return pool
+
+
+def _phon_score_in_pool(cvars, pool):
+    """발음 후보들끼리 비교해서 가장 잘 맞는 줄의 점수와 그 줄"""
+    best, best_line = 0.0, ""
+    for item in pool:
+        for x in item[2]:
+            for t in cvars:
+                if len(t) < PHON_MIN:
+                    continue
+                sc = fuzz.partial_ratio(t, x) if len(x) >= len(t) else fuzz.ratio(t, x)
+                if sc > best:
+                    best, best_line = sc, item[0]
+    return best, best_line
 
 
 def _score_in_pool(t, pool, field=1):
@@ -540,6 +585,8 @@ _ALIAS_GROUPS = [
     ["zinc oxide", "산화아연"],
     ["potassium chloride", "염화칼륨"],
     ["ferrous sulfate", "황산제일철"],
+    ["insulin glargine", "인슐린글라진"],
+    ["acyclovir", "aciclovir", "아시클로버"],
     ["ascorbic acid", "아스코르브산", "아스코르빈산", "비타민c", "vitamin c"],
     ["thiamine", "티아민", "비타민b1"],
     ["riboflavin", "리보플라빈", "비타민b2"],
@@ -552,7 +599,7 @@ for _g in _ALIAS_GROUPS:
     for _w in _g:
         _ALIAS[norm(_w)] = _g
 
-_UNIT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:mg|mcg|μg|ug|g|ml|iu|%|밀리그램|그램|㎎|㎖|정|캡슐)", re.I)
+_UNIT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:mg|mcg|μg|ug|ml|g|iu|%|밀리그램|밀리리터|마이크로그램|그램|리터|㎎|㎖|정|캡슐)", re.I)
 _SALT_RE = re.compile(
     r"(염산염|황산염|말레산염|베실산염|메실산염|푸마르산염|타르타르산염|시트르산염|숙신산염|아세트산염|브롬화수소산염|"
     r"인산염|질산염|나트륨수화물|일수화물|이수화물|수화물|무수물|나트륨|칼륨|칼슘|"
@@ -608,9 +655,9 @@ def best_match(cands, texts, full=None, base=INGR_PASS):
         sc, ln = _score_in_pool(jamo(c), pool)
         if sc >= required_score(c, base):
             passed = True
-        pc = phon(c)
-        if len(pc) >= PHON_MIN:
-            psc, pln = _score_in_pool(pc, pool, field=2)
+        pvars = {v for v in phon_variants(c) if len(v) >= PHON_MIN}
+        if pvars:
+            psc, pln = _phon_score_in_pool(pvars, pool)
             if psc >= PHON_PASS:
                 passed = True
                 psc = max(psc, base)           # 발음으로 같은 성분이면 '일치' 기준 이상으로 표시
@@ -980,8 +1027,11 @@ def evaluate(drug, lines):
 
     my_doses = doses_in(drug["name"]) | doses_in(drug["ingredient"])
     photo_doses = doses_in(" ".join(texts))
-    dose_ok = bool(my_doses & photo_doses) if my_doses else None
-    other = set(sibling_doses(drug["name"], drug["ingredient"])) - my_doses
+    sib = set(sibling_doses(drug["name"], drug["ingredient"]))
+    # 이 약만의 함량으로 비교 (예: 마운자로 5mg/0.5mL -> 모든 함량에 공통인 0.5mL은 빼고 5mg로)
+    key_doses = (my_doses - sib) or my_doses
+    dose_ok = bool(key_doses & photo_doses) if key_doses else None
+    other = sib - my_doses
     dose_conflict = bool(other & photo_doses) and not dose_ok
 
     if name_ok:
