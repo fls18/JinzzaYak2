@@ -329,7 +329,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .st-key-bottomnav [data-testid="stColumn"], .st-key-bottomnav [data-testid="column"]{
     flex: 1 1 0 !important; 
-    width: 33.333% !important; 
+    width: 50% !important; /* 33.333%에서 50%로 변경! */
     display: flex; 
     justify-content: center;
 }
@@ -823,10 +823,9 @@ def topbar(title=None, back=None):
 
 def bottom_nav(active):
     items = [("home", "검색", ":material/search:"),
-             ("favorites", "즐겨찾기", ":material/bookmark:"),
-             ("mymenu", "마이메뉴", ":material/person:")]
+             ("mymenu", "마이메뉴", ":material/person:")] # 즐겨찾기 제외
     with st.container(key="bottomnav"):
-        cols = st.columns(3)
+        cols = st.columns(2) # 3에서 2로 변경!
         for col, (pg, label, icon) in zip(cols, items):
             with col:
                 st.button(label, icon=icon, key="nav_" + pg,
