@@ -158,7 +158,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   position:absolute; inset:0; width:100%; height:100%; opacity:0; z-index:2; cursor:pointer;
 }
 [class*="st-key-upwrap"] [data-testid="stFileUploaderDropzone"]::after{
-  content:"+  사진 추가"; font-size:15px; font-weight:600; color:var(--mute); pointer-events:none;
+  content:"+ 사진 추가"; font-size:15px; font-weight:600; color:var(--mute); pointer-events:none;
 }
 [class*="st-key-upwrap"] [data-testid="stFileUploaderFile"],
 [class*="st-key-upwrap"] [data-testid="stFileUploaderPagination"]{ display:none; }
@@ -172,7 +172,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 [class*="st-key-rm_"] [data-testid="stIconMaterial"]{ font-size:14px; }
 
-/* 성분 비교 (빨간 테두리, 조금 더 짧게) */
+/* 성분 비교 */
 .st-key-btn_compare .stButton{ display:flex; justify-content:center; }
 .st-key-btn_compare .stButton > button{
   width:80%; border:1.5px solid var(--red) !important; color:var(--red) !important; background:#fff;
@@ -259,7 +259,6 @@ st.markdown(CSS, unsafe_allow_html=True)
 def normalize(s: str) -> str:
     return re.sub(r"[^0-9a-z가-힣]", "", str(s).lower())
 
-
 _ALIAS_GROUPS = [
     ["acetaminophen", "아세트아미노펜", "paracetamol", "파라세타몰"],
     ["ibuprofen", "이부프로펜"],
@@ -295,9 +294,7 @@ for _g in _ALIAS_GROUPS:
 
 UNIT_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:mg|mcg|μg|ug|g|ml|iu|%|밀리그램|그램|㎎|㎖)", re.I)
 
-
 def split_ingredients(s: str):
-    """'아세트아미노펜(Acetaminophen) 500mg, 카페인' → [[아세트아미노펜, Acetaminophen], [카페인]]"""
     if not s:
         return []
     s = UNIT_RE.sub(" ", s)
@@ -313,7 +310,6 @@ def split_ingredients(s: str):
             groups.append(names)
     return groups
 
-
 def expand_aliases(names):
     out = list(names)
     for n in names:
@@ -326,9 +322,7 @@ def expand_aliases(names):
             uniq.append(k)
     return uniq
 
-
 def fuzzy_find(token: str, text: str):
-    """text(정규화된 OCR 전문) 안에서 token과 가장 비슷한 조각을 찾아 (유사도, 조각) 반환"""
     if len(token) < 2 or not text:
         return 0.0, ""
     if token in text:
@@ -346,21 +340,16 @@ def fuzzy_find(token: str, text: str):
                 best, frag = r, text[i:i + L]
     return best, frag
 
-
 _CONFUSE = str.maketrans("OoDQIil|SsBZz", "0000111155822")
 
-
 def digit_stream(text: str) -> str:
-    """OCR이 숫자를 문자로 잘못 읽는 경우(O→0, l→1 등)를 보정한 숫자열"""
     runs = re.findall(r"[0-9OoDQIil|SsBZz]{3,}", text)
     good = [r for r in runs if sum(ch.isdigit() for ch in r) >= len(r) / 2]
     return "".join(r.translate(_CONFUSE) for r in good)
 
-
 def normalize_company(s: str) -> str:
     s = re.sub(r"\(주\)|㈜|주식회사|\(유\)|유한회사|co\.?,?\s*ltd\.?|inc\.?", "", str(s), flags=re.I)
     return normalize(s)
-
 
 # =========================================================
 # 데이터
@@ -389,7 +378,6 @@ def load_drug_data(path="drugs.csv"):
     df["_i"] = df[ING].map(normalize)
     return df
 
-
 try:
     DF = load_drug_data()
 except Exception as e:
@@ -397,10 +385,8 @@ except Exception as e:
                 unsafe_allow_html=True)
     st.stop()
 
-
 def to_rec(row):
     return {"name": row[NAME], "ingredient": row[ING], "manufacturer": row[MANUF], "code": row[CODE]}
-
 
 def search_drugs(q: str, limit=50):
     nq = normalize(q)
@@ -414,7 +400,6 @@ def search_drugs(q: str, limit=50):
     hit = hit.sort_values(["_r", NAME])
     return [to_rec(r) for _, r in hit.head(limit).iterrows()], len(hit)
 
-
 # =========================================================
 # OCR
 # =========================================================
@@ -423,9 +408,7 @@ def get_ocr_reader():
     import easyocr
     return easyocr.Reader(["ko", "en"], gpu=False)
 
-
 def preprocess(pil: Image.Image, precise: bool):
-    """조명·해상도 보정 후 OCR용 이미지 변형들을 만든다."""
     img = ImageOps.exif_transpose(pil).convert("RGB")
     arr = np.array(img)
     h, w = arr.shape[:2]
@@ -437,7 +420,6 @@ def preprocess(pil: Image.Image, precise: bool):
                          interpolation=cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA)
     gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
 
-    # 1) 대비 보정 + 노이즈 제거 + 샤프닝
     clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
     den = cv2.fastNlMeansDenoising(clahe, h=7)
     blur = cv2.GaussianBlur(den, (0, 0), 1.2)
@@ -445,14 +427,12 @@ def preprocess(pil: Image.Image, precise: bool):
     variants = [sharp]
 
     if precise:
-        # 2) 그림자 제거(배경 나눗셈) + Otsu 이진화 — 반사광·그늘진 포장지에 강함
         bg = cv2.morphologyEx(gray, cv2.MORPH_CLOSE,
-                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
+                             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
         flat = cv2.divide(gray, bg, scale=255)
         _, binar = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         variants.append(binar)
     return variants
-
 
 @st.cache_data(show_spinner=False, max_entries=32)
 def ocr_image(data: bytes, precise: bool, rotate: bool):
@@ -476,7 +456,6 @@ def ocr_image(data: bytes, precise: bool, rotate: bool):
             if key not in merged or conf > merged[key][1]:
                 merged[key] = [text, float(conf)]
     return list(merged.values())
-
 
 def evaluate(drug: dict, lines):
     texts = [t for t, _ in lines]
@@ -520,7 +499,6 @@ def evaluate(drug: dict, lines):
         "lines": lines, "time": datetime.now().strftime("%m.%d %H:%M"),
     }
 
-
 # =========================================================
 # 상태
 # =========================================================
@@ -534,21 +512,17 @@ for k, v in _DEFAULTS.items():
     if k not in ss:
         ss[k] = list(v) if isinstance(v, list) else v
 
-
 def go(page):
     ss.page = page
-
 
 def open_menu():
     ss.prev = ss.page
     ss.page = "menu"
 
-
 def reset_home():
     ss.applied, ss.results, ss.files, ss.err = None, None, [], ""
     ss.q = ""
     ss.page = "home"
-
 
 def do_search(query=None):
     if query is not None:
@@ -564,7 +538,6 @@ def do_search(query=None):
     ss.history = ([q] + [h for h in ss.history if h != q])[:8]
     ss.results, ss.total = search_drugs(q)
 
-
 def on_pick_history():
     key = f"hist_{ss.hist_n}"
     val = ss.get(key)
@@ -572,17 +545,14 @@ def on_pick_history():
     if val:
         do_search(val)
 
-
 def apply_drug(rec):
     ss.applied = rec
     ss.q = rec["name"]
     ss.results, ss.files, ss.err = None, [], ""
     ss.page = "home"
 
-
 def is_bookmarked(name):
     return any(b["name"] == name for b in ss.bookmarks)
-
 
 def toggle_bookmark(rec):
     if is_bookmarked(rec["name"]):
@@ -592,7 +562,6 @@ def toggle_bookmark(rec):
         ss.bookmarks = [rec] + ss.bookmarks
         st.toast("즐겨찾기에 추가했습니다")
 
-
 def make_thumb(data: bytes, size=480) -> str:
     im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
     im.thumbnail((size, size))
@@ -600,10 +569,8 @@ def make_thumb(data: bytes, size=480) -> str:
     im.save(buf, "JPEG", quality=82)
     return base64.b64encode(buf.getvalue()).decode()
 
-
 def fmt_size(n):
     return f"{n / 1024:.0f} KB" if n < 1024 * 1024 else f"{n / 1024 / 1024:.1f} MB"
-
 
 def on_upload():
     new = ss.get(f"uploader_{ss.up_n}") or []
@@ -625,10 +592,8 @@ def on_upload():
     ss.files = files
     ss.up_n += 1
 
-
 def remove_file(i):
     ss.files = [f for j, f in enumerate(ss.files) if j != i]
-
 
 def start_compare():
     if not ss.files:
@@ -637,15 +602,12 @@ def start_compare():
     ss.err = ""
     ss.page = "analyzing"
 
-
 def open_result(r):
     ss.result = r
     ss.page = "result"
 
-
 def set_opt(name):
     ss[name] = ss[f"w_{name}"]
-
 
 # =========================================================
 # 공통 UI
@@ -664,7 +626,6 @@ def topbar(title=None, back=None):
             else:
                 st.markdown('<div class="brand">진짜약<span>Jinzzayak</span></div>', unsafe_allow_html=True)
 
-
 def bottom_nav(active):
     items = [("home", "검색", ":material/search:"),
              ("favorites", "즐겨찾기", ":material/bookmark:"),
@@ -677,7 +638,6 @@ def bottom_nav(active):
                           type="primary" if pg == active else "secondary",
                           on_click=go, args=(pg,))
 
-
 def drug_row(rec, i, prefix):
     on = is_bookmarked(rec["name"])
     with st.container(key=f"{prefix}row_{i}"):
@@ -688,7 +648,6 @@ def drug_row(rec, i, prefix):
             with st.container(key=f"bmc{'on' if on else ''}_{prefix}{i}"):
                 st.button("", icon=":material/bookmark:" if on else ":material/bookmark_border:",
                           key=f"bm_{prefix}{i}", on_click=toggle_bookmark, args=(rec,))
-
 
 # =========================================================
 # 화면
@@ -877,7 +836,7 @@ def page_report():
     with st.expander(f"인식된 텍스트 보기 ({len(r['lines'])}줄)"):
         if r["lines"]:
             st.markdown("<br>".join(f'{esc(t)} <span style="color:#B0B8C1;font-size:11px">{c:.2f}</span>'
-                                    for t, c in r["lines"]), unsafe_allow_html=True)
+                                     for t, c in r["lines"]), unsafe_allow_html=True)
         else:
             st.markdown('<div class="empty">인식된 텍스트가 없습니다. 글자가 크고 선명하게 나오도록 다시 찍어주세요.</div>',
                         unsafe_allow_html=True)
@@ -932,7 +891,7 @@ def page_mymenu():
     for i, r in enumerate(ss.analyses):
         mark = "정품" if r["genuine"] else "가품 의심"
         with st.container(key=f"frow_{i}"):
-            st.button(f'{r["drug"]["name"]}  ·  {mark} {r["rate"]:.0f}%  ·  {r["time"]}',
+            st.button(f'{r["drug"]["name"]} · {mark} {r["rate"]:.0f}% · {r["time"]}',
                       key=f"open_{i}", on_click=open_result, args=(r,))
     st.button("설정", icon=":material/settings:", key="my_set", on_click=go, args=("settings",))
     bottom_nav("mymenu")
