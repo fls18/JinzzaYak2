@@ -80,30 +80,30 @@ if 'analyzing' not in st.session_state:
     st.session_state.analyzing = False
 if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
+if 'show_report' not in st.session_state:
+    st.session_state.show_report = False
 
 # ==========================================
-# 사이드바 (삼단바 메뉴 클릭 시 뜨는 창)
+# 사이드바 (삼단바 메뉴)
 # ==========================================
 with st.sidebar:
     st.markdown("## 💊 진짜약 메뉴")
     st.markdown("---")
-    if st.button("🏠 약품 성분 검색/판별", use_container_width=True):
+    if st.button("🏠 약품 성분 검색/판별", use_container_width=True, key="sb_main"):
         st.session_state.menu = "메인"
         st.session_state.analysis_done = False
+        st.session_state.show_report = False
         st.rerun()
-    if st.button("⭐ 즐겨찾기 (북마크)", use_container_width=True):
+    if st.button("⭐ 즐겨찾기 (북마크)", use_container_width=True, key="sb_bm"):
         st.session_state.menu = "즐겨찾기"
         st.rerun()
-    if st.button("👤 마이메뉴", use_container_width=True):
+    if st.button("👤 마이메뉴", use_container_width=True, key="sb_my"):
         st.session_state.menu = "마이메뉴"
         st.rerun()
-    if st.button("⚙️ 설정", use_container_width=True):
+    if st.button("⚙️ 설정", use_container_width=True, key="sb_set"):
         st.session_state.menu = "설정"
         st.rerun()
 
-# ==========================================
-# [화면 1] 서브 메뉴 페이지들
-# ==========================================
 if st.session_state.menu != "메인":
     st.markdown(f"### {st.session_state.menu}")
     st.markdown("---")
@@ -118,36 +118,34 @@ if st.session_state.menu != "메인":
     elif st.session_state.menu == "설정":
         st.write("앱 환경 설정 및 버전 정보 (v1.0.0)")
         
-    if st.button("메인으로 돌아가기"):
+    if st.button("메인으로 돌아가기", key="back_menu"):
         st.session_state.menu = "메인"
         st.rerun()
     st.stop()
 
 # ==========================================
-# [화면 2] 메인 화면 (모바일 앱 프레임)
+# 메인 화면
 # ==========================================
-# 상단바 (삼단바 아이콘 및 타이틀)
 col_top1, col_top2 = st.columns([1, 6])
 with col_top1:
-    # 삼단바 클릭 유도 텍스트 또는 아이콘
     st.markdown("### ☰")
 with col_top2:
     st.markdown("### **진짜약**")
 st.markdown("---")
 
-# 1. 검색창 및 검색 버튼 영역 (버튼 중앙 정렬 및 차분한 색상 적용)
+# 검색창 및 검색 버튼
 search_query = st.text_input("", placeholder="검색할 약품명을 입력하세요", label_visibility="collapsed", key="search_input")
 
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 with col_b2:
-    search_clicked = st.button("검색", use_container_width=True)
+    search_clicked = st.button("검색", key="search_btn", use_container_width=True)
 
 if search_clicked:
     st.session_state.search_keyword = search_query
     st.session_state.selected_drug = None
     st.session_state.analysis_done = False
+    st.session_state.show_report = False
 
-# CSV 컬럼 키 매칭
 col_name_key = "Product Name"         
 ingredient_key = "Active Ingredient"  
 manuf_key = "Manufacturer"            
@@ -155,14 +153,13 @@ code_key = "MTRAL_CC"
 
 current_keyword = st.session_state.search_keyword
 
-# 2. 분석 중인 상태 화면 (창이 아예 바뀜)
+# 1. 분석 중 화면
 if st.session_state.get("analyzing", False):
     st.markdown("---")
     st.markdown("<h2 style='text-align: center;'>💊 약품 분석 중</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>이미지 속 성분 정보를 정밀하게 대조하고 있습니다...</p>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # 로딩 바 연출
     progress_bar = st.progress(0)
     for percent_complete in range(100):
         time.sleep(0.01)
@@ -172,39 +169,13 @@ if st.session_state.get("analyzing", False):
     st.session_state.analysis_done = True
     st.rerun()
 
-# 3. 분석 완료 후 결과 화면
-elif st.session_state.analysis_done:
-    st.markdown("### **성분 대조 및 최종 판정 결과**")
+# 2. 상세 항목별 대조 리포트 단독 페이지 (버튼 클릭 후 넘어옴)
+elif st.session_state.show_report:
+    st.markdown("### 📋 상세 항목별 대조 리포트")
+    st.markdown("---")
     
     selected = st.session_state.selected_drug
-    target_ingredient = str(selected.get(ingredient_key, "")).lower()
-    full_text = st.session_state.get("full_raw_text", "").lower()
-    
-    # 판정 로직
-    is_matched = ("아세트" in full_text) or ("acetaminophen" in full_text) or (target_ingredient[:3] in full_text)
-    match_score = 98.5 if is_matched else 42.1
-    is_genuine = is_matched
-
-    # 결과 요약 카드
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-        st.caption("주성분 일치 여부")
-        if is_genuine:
-            st.markdown("<h3 style='color: #34C759;'>일치</h3>", unsafe_allow_html=True)
-        else:
-            st.markdown("<h3 style='color: #FF3B30;'>불일치</h3>", unsafe_allow_html=True)
-    with col_r2:
-        st.caption("성분 일치율")
-        st.markdown(f"<h3>{match_score:.1f}%</h3>", unsafe_allow_html=True)
-        
-    st.caption("최종 판정")
-    if is_genuine:
-        st.markdown("<h2 style='color: #34C759;'>정품 (GENUINE)</h2>", unsafe_allow_html=True)
-    else:
-        st.markdown("<h2 style='color: #FF3B30;'>가품 의심 (COUNTERFEIT)</h2>", unsafe_allow_html=True)
-
-    # 상세 항목별 대조 리포트 테이블 (KeyError 방지용 .get 적용)
-    st.markdown("#### **상세 항목별 대조 리포트**")
+    is_genuine = st.session_state.get("is_genuine", True)
     
     report_data = {
         "검증 항목": ["품목기준코드", "주성분명", "제조사", "판정 상태"],
@@ -228,17 +199,58 @@ elif st.session_state.analysis_done:
         ]
     }
     st.table(pd.DataFrame(report_data))
+    
+    if st.button("결과 화면으로 돌아가기", key="back_to_result", use_container_width=True):
+        st.session_state.show_report = False
+        st.rerun()
 
-    if st.button("메인화면으로 돌아가기", use_container_width=True):
+# 3. 분석 완료 후 결과 화면
+elif st.session_state.analysis_done:
+    st.markdown("### **성분 대조 및 최종 판정 결과**")
+    
+    selected = st.session_state.selected_drug
+    target_ingredient = str(selected.get(ingredient_key, "")).lower()
+    full_text = st.session_state.get("full_raw_text", "").lower()
+    
+    is_matched = ("아세트" in full_text) or ("acetaminophen" in full_text) or (target_ingredient[:3] in full_text)
+    match_score = 98.5 if is_matched else 42.1
+    is_genuine = is_matched
+    st.session_state.is_genuine = is_genuine
+
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        st.caption("주성분 일치 여부")
+        if is_genuine:
+            st.markdown("<h3 style='color: #34C759;'>일치</h3>", unsafe_allow_html=True)
+        else:
+            st.markdown("<h3 style='color: #FF3B30;'>불일치</h3>", unsafe_allow_html=True)
+    with col_r2:
+        st.caption("성분 일치율")
+        st.markdown(f"<h3>{match_score:.1f}%</h3>", unsafe_allow_html=True)
+        
+    st.caption("최종 판정")
+    if is_genuine:
+        st.markdown("<h2 style='color: #34C759;'>정품 (GENUINE)</h2>", unsafe_allow_html=True)
+    else:
+        st.markdown("<h2 style='color: #FF3B30;'>가품 의심 (COUNTERFEIT)</h2>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    
+    # 상세 항목별 대조 리포트 확인하기 버튼 (창이 넘어가도록 설정)
+    if st.button("상세 항목별 대조 리포트 확인하기", key="go_report_btn", use_container_width=True):
+        st.session_state.show_report = True
+        st.rerun()
+
+    if st.button("메인화면으로 돌아가기", key="back_main_res", use_container_width=True):
         st.session_state.selected_drug = None
         st.session_state.search_keyword = ""
         st.session_state.analysis_done = False
+        st.session_state.show_report = False
         st.rerun()
 
-# 4. 약품 선택 전 / 선택 후 이미지 업로드 대기 화면
+# 4. 약품 검색 및 선택 화면
 else:
     if st.session_state.selected_drug is None:
-        # --- [상태 A] 검색 결과 리스트 표시 ---
         if current_keyword:
             matched_df = df_drugs[
                 df_drugs[col_name_key].str.contains(current_keyword, case=False, na=False) | 
@@ -247,18 +259,21 @@ else:
             
             if not matched_df.empty:
                 st.markdown(f"**검색된 약품 목록** (총 {len(matched_df)}건)")
-                # 회색 바탕 컨테이너 안에 깔끔하게 리스트 표시 (빨간 버튼 제거)
+                
+                # 회색 바탕 리스트 (색상 없는 깔끔한 텍스트형태 + 우측 북마크)
                 with st.container(border=True):
                     for idx, row in matched_df.head(10).iterrows():
                         d_name = row[col_name_key]
                         c_col1, c_col2 = st.columns([5, 1])
+                        
                         with c_col1:
-                            if st.button(f"💊 {d_name}", key=f"drug_{idx}", use_container_width=True):
+                            # 버튼 색상을 없애고 깔끔하게 처리하기 위한 고유 키 부여
+                            if st.button(f"💊 {d_name}", key=f"select_drug_{idx}", use_container_width=True):
                                 st.session_state.selected_drug = row.to_dict()
                                 st.rerun()
                         with c_col2:
                             is_bm = d_name in st.session_state.bookmarks
-                            if st.button("⭐" if is_bm else "☆", key=f"bm_{idx}"):
+                            if st.button("⭐" if is_bm else "☆", key=f"bm_btn_{idx}", use_container_width=True):
                                 if is_bm:
                                     st.session_state.bookmarks.remove(d_name)
                                 else:
@@ -270,7 +285,7 @@ else:
             st.info("💡 검색할 약품명을 입력하고 검색 버튼을 눌러주세요.")
 
     else:
-        # --- [상태 B] 약품 선택 완료 후 (짧똥한 업로드 영역) ---
+        # 약품 선택 완료 후 이미지 업로드 화면
         selected = st.session_state.selected_drug
         d_name = selected[col_name_key]
         is_bm = d_name in st.session_state.bookmarks
@@ -279,7 +294,7 @@ else:
         with col_sel1:
             st.success(f"✔️ **{d_name}**")
         with col_sel2:
-            if st.button("⭐ 북마크" if not is_bm else "★ 취소"):
+            if st.button("⭐ 북마크" if not is_bm else "★ 취소", key="sel_bm_toggle"):
                 if is_bm:
                     st.session_state.bookmarks.remove(d_name)
                 else:
@@ -288,7 +303,6 @@ else:
 
         st.markdown("---")
         
-        # 이미지 업로드 (짧똥한 회색 박스 느낌)
         st.markdown("#### 이미지를 업로드 하세요")
         uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
         
@@ -302,8 +316,7 @@ else:
                     st.markdown(f"**파일명:** {uploaded_file.name}")
                     st.caption(f"크기: {uploaded_file.size / 1024:.1f} KB")
             
-            if st.button("🚀 성분 비교 및 판정 시작", use_container_width=True):
-                # OCR 실행 및 분석 상태 활성화
+            if st.button("🚀 성분 비교 및 판정 시작", key="start_ocr_btn", use_container_width=True):
                 img_np = np.array(image_preview)
                 results = reader.readtext(img_np)
                 st.session_state.full_raw_text = " ".join([text[1] for text in results])
