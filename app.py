@@ -1042,7 +1042,7 @@ def page_mymenu():
         mark = "정품" if r["genuine"] else "가품 의심"
         with st.container(key="hrow_%d" % i):
             st.button("%s  ·  %s %.0f%%  ·  %s" % (r["drug"]["name"], mark, r["rate"], r["time"]),
-                      key="open_%d" % i, on_click=open_result, args=(r,)
+                      key="open_%d" % i, on_click=open_result, args=(r,))
 
 
 def page_settings():
