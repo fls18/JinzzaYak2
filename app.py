@@ -518,4 +518,546 @@ def get_ocr_reader():
 
 
 def preprocess(pil, variant):
-    img
+    img = ImageOps.exif_transpose(pil).convert("RGB")
+    arr = np.array(img)
+    h, w = arr.shape[:2]
+    long_side = max(h, w)
+    target = 1800
+    if long_side < target * 0.75 or long_side > target * 1.2:
+        scale = target / long_side
+        arr = cv2.resize(arr, None, fx=scale, fy=scale,
+                         interpolation=cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA)
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    del arr, img
+
+    if variant == 0:
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
+        den = cv2.fastNlMeansDenoising(clahe, h=7)
+        blur = cv2.GaussianBlur(den, (0, 0), 1.2)
+        return cv2.addWeighted(den, 1.6, blur, -0.6, 0)
+
+    bg = cv2.morphologyEx(gray, cv2.MORPH_CLOSE,
+                          cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
+    flat = cv2.divide(gray, bg, scale=255)
+    _, binar = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return binar
+
+
+@st.cache_data(show_spinner=False, max_entries=48)
+def ocr_pass(data, variant, precise, rotate):
+    reader = get_ocr_reader()
+    kw = dict(
+        detail=1, paragraph=False,
+        decoder="beamsearch" if precise else "greedy", beamWidth=5, batch_size=1,
+        contrast_ths=0.1, adjust_contrast=0.6,
+        text_threshold=0.6, low_text=0.3, link_threshold=0.4,
+        mag_ratio=1.0, canvas_size=1800,
+    )
+    if rotate:
+        kw["rotation_info"] = [90, 180, 270]
+    img = preprocess(Image.open(io.BytesIO(data)), variant)
+    out = []
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        for _, text, conf in reader.readtext(img, **kw):
+            text = text.strip()
+            if normalize(text) and conf >= 0.15:
+                out.append([text, float(conf)])
+    del img
+    gc.collect()
+    return out
+
+
+def merge_lines(merged, lines):
+    for text, conf in lines:
+        k = normalize(text)
+        if k not in merged or conf > merged[k][1]:
+            merged[k] = [text, conf]
+
+
+def evaluate(drug, lines):
+    texts = [t for t, _ in lines]
+    full = " ".join(texts)
+    nfull = normalize(full)
+
+    def original_line(frag):
+        for t in texts:
+            if frag and frag in normalize(t):
+                return t
+        return frag
+
+    per = []
+    for g in split_ingredients(drug["ingredient"]):
+        best = (0.0, "")
+        for cand in expand_aliases(g):
+            sc, fr = fuzzy_find(cand, nfull)
+            if sc > best[0]:
+                best = (sc, fr)
+            if sc >= 1.0:
+                break
+        per.append({"name": g[0], "score": best[0],
+                    "found": original_line(best[1]) if best[0] >= 0.6 else ""})
+
+    code = re.sub(r"\D", "", drug["code"]) if has_code(drug["code"]) else ""
+    code_ok = len(code) >= 6 and code in digit_stream(full)
+
+    mn = normalize_company(drug["manufacturer"])
+    m_sc, m_fr = fuzzy_find(mn, nfull) if mn else (0.0, "")
+
+    ing_rate = sum(p["score"] for p in per) / len(per) if per else 0.0
+    ing_ok = bool(per) and all(p["score"] >= 0.8 for p in per)
+    rate = ing_rate * 100
+    if code_ok:
+        rate = max(rate, 95.0)
+
+    return {
+        "drug": drug, "per": per, "ing_ok": ing_ok, "code_ok": code_ok,
+        "manuf_score": m_sc, "manuf_found": original_line(m_fr) if m_sc >= 0.6 else "",
+        "rate": rate, "genuine": ing_ok or code_ok,
+        "lines": lines, "time": datetime.now().strftime("%m.%d %H:%M"),
+    }
+
+
+# =========================================================
+# 상태
+# =========================================================
+_DEFAULTS = {
+    "page": "home", "prev": "home", "results": None, "total": 0,
+    "applied": None, "files": [], "up_n": 0, "hist_n": 0,
+    "history": [], "bookmarks": [], "analyses": [], "result": None,
+    "precise": True, "rotate": False, "err": "",
+}
+for _k, _v in _DEFAULTS.items():
+    if _k not in ss:
+        ss[_k] = list(_v) if isinstance(_v, list) else _v
+
+
+def go(page):
+    ss.page = page
+
+
+def toggle_menu():
+    if ss.page == "menu":
+        ss.page = ss.prev
+    else:
+        ss.prev = ss.page
+        ss.page = "menu"
+
+
+def reset_home():
+    ss.applied, ss.results, ss.files, ss.err = None, None, [], ""
+    ss.q = ""
+    ss.page = "home"
+
+
+def clear_list(name):
+    ss[name] = []
+
+
+def do_search(query=None):
+    if query is not None:
+        ss.q = query
+    q = str(ss.get("q", "")).strip()
+    if not q:
+        st.toast("약품명을 입력해주세요")
+        return
+    if ss.applied and q == ss.applied["name"]:
+        st.toast("이미 적용된 약품입니다")
+        return
+    ss.applied, ss.files, ss.err = None, [], ""
+    ss.history = ([q] + [h for h in ss.history if h != q])[:8]
+    ss.results, ss.total = search_drugs(q)
+
+
+def on_pick_history():
+    val = ss.get("hist_" + str(ss.hist_n))
+    ss.hist_n += 1
+    if val:
+        do_search(val)
+
+
+def apply_drug(rec):
+    ss.applied = rec
+    ss.q = rec["name"]
+    ss.results, ss.files, ss.err = None, [], ""
+    ss.page = "home"
+
+
+def is_bookmarked(name):
+    return any(b["name"] == name for b in ss.bookmarks)
+
+
+def toggle_bookmark(rec):
+    if is_bookmarked(rec["name"]):
+        ss.bookmarks = [b for b in ss.bookmarks if b["name"] != rec["name"]]
+        st.toast("즐겨찾기에서 삭제했습니다")
+    else:
+        ss.bookmarks = [rec] + ss.bookmarks
+        st.toast("즐겨찾기에 추가했습니다")
+
+
+def make_thumb(data, size=320):
+    im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    im.thumbnail((size, size))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=80)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def fmt_size(n):
+    if n < 1024 * 1024:
+        return "%.0f KB" % (n / 1024)
+    return "%.1f MB" % (n / 1024 / 1024)
+
+
+def on_upload():
+    new = ss.get("uploader_" + str(ss.up_n)) or []
+    have = {(f["name"], f["size"]) for f in ss.files}
+    files = list(ss.files)
+    for uf in new:
+        if len(files) >= MAX_FILES:
+            st.toast("사진은 최대 %d장까지 올릴 수 있습니다" % MAX_FILES)
+            break
+        data = uf.getvalue()
+        if (uf.name, len(data)) in have:
+            continue
+        try:
+            thumb = make_thumb(data)
+        except Exception:
+            st.toast(uf.name + " 파일을 열 수 없습니다")
+            continue
+        files.append({"name": uf.name, "size": len(data), "data": data, "thumb": thumb})
+    ss.files = files
+    ss.up_n += 1
+
+
+def remove_file(i):
+    ss.files = [f for j, f in enumerate(ss.files) if j != i]
+
+
+def start_compare():
+    if not ss.files:
+        st.toast("성분표 사진을 먼저 올려주세요")
+        return
+    ss.err = ""
+    ss.page = "analyzing"
+
+
+def open_result(r):
+    ss.result = r
+    ss.page = "result"
+
+
+def set_opt(name):
+    ss[name] = ss["w_" + name]
+
+
+# =========================================================
+# 공통 UI
+# =========================================================
+def topbar(title=None, back=None):
+    with st.container(key="topbar"):
+        if back:
+            st.button(title or "", icon=":material/arrow_back:", key="tb_back", on_click=go, args=(back,))
+        else:
+            st.button(title or "진짜약", icon=":material/menu:", key="tb_menu", on_click=toggle_menu)
+
+
+def drug_row(rec, i, prefix):
+    on = is_bookmarked(rec["name"])
+    with st.container(key="row_%s%d" % (prefix, i)):
+        c1, c2 = st.columns([7, 1], vertical_alignment="center")
+        with c1:
+            st.button(rec["name"], key="res_%s%d" % (prefix, i), on_click=apply_drug, args=(rec,))
+        with c2:
+            with st.container(key="bmc%s_%s%d" % ("on" if on else "", prefix, i)):
+                st.button("", icon=":material/bookmark:" if on else ":material/bookmark_border:",
+                          key="bm_%s%d" % (prefix, i), on_click=toggle_bookmark, args=(rec,))
+
+
+# =========================================================
+# 화면
+# =========================================================
+def page_home():
+    topbar()
+
+    applied = ss.applied
+    with st.container(key="searchrow"):
+        with st.form("search_form", border=False):
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
+            with c1:
+                st.text_input("약품명", key="q", placeholder="검색할 약품명을 입력하세요",
+                              label_visibility="collapsed")
+            with c2:
+                st.form_submit_button("적용됨" if applied else "검색", type="primary", on_click=do_search)
+
+    if ss.err:
+        st.markdown('<div class="err">' + esc(ss.err) + "</div>", unsafe_allow_html=True)
+
+    # 약품 적용 후: 업로드
+    if applied:
+        st.markdown(
+            '<div class="applied"><span class="tag">적용되었습니다</span>'
+            '<div class="nm">' + esc(applied["name"]) + "</div>"
+            '<div class="meta">주성분 ' + esc(applied["ingredient"] or "-") + "<br>"
+            + esc(applied["manufacturer"] or "-")
+            + (" · 품목기준코드 " + esc(applied["code"]) if has_code(applied["code"]) else "")
+            + "</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="sec up"><b>이미지를 업로드하세요</b>'
+            "<small>.jpg .png .jpeg · 최대 %d장</small></div>" % MAX_FILES,
+            unsafe_allow_html=True,
+        )
+
+        files = ss.files
+        per_row = 4
+        for start in range(0, len(files), per_row):
+            cols = st.columns(per_row)
+            for j, col in enumerate(cols):
+                idx = start + j
+                if idx >= len(files):
+                    continue
+                f = files[idx]
+                with col:
+                    with st.container(key="chip_%d" % idx):
+                        st.markdown(
+                            '<div class="chip"><img src="data:image/jpeg;base64,' + f["thumb"] + '"/>'
+                            '<div class="n">' + esc(f["name"]) + "</div>"
+                            '<div class="s">' + fmt_size(f["size"]) + "</div></div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.button("", icon=":material/close:", key="rm_%d" % idx,
+                                  on_click=remove_file, args=(idx,))
+
+        if len(files) < MAX_FILES:
+            with st.container(key="upwrap" if files else "upwrap_empty"):
+                st.file_uploader("이미지 업로드", type=["jpg", "jpeg", "png"], accept_multiple_files=True,
+                                 key="uploader_" + str(ss.up_n), on_change=on_upload,
+                                 label_visibility="collapsed")
+
+        st.button("성분 비교", key="btn_compare", on_click=start_compare)
+
+    # 검색 후: 결과 목록
+    elif ss.results is not None:
+        if not ss.results:
+            st.markdown(
+                '<div class="notice"><b>약품명이 일치하지 않습니다.</b>약품명을 다시 확인해주세요.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            if ss.total > len(ss.results):
+                more = "상위 %d개 표시" % len(ss.results)
+            else:
+                more = "약품을 눌러 적용"
+            st.markdown(
+                '<div class="sec"><b>검색된 약품 목록 %d</b><small>%s</small></div>' % (ss.total, more),
+                unsafe_allow_html=True,
+            )
+            with st.container(height=330, border=False, key="reslist"):
+                for i, rec in enumerate(ss.results):
+                    drug_row(rec, i, "")
+
+    # 기본: 검색 기록
+    else:
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+        with c1:
+            st.markdown('<div class="sec"><b>검색 기록</b></div>', unsafe_allow_html=True)
+        with c2:
+            if ss.history:
+                st.button("전체 삭제", key="hist_clear", on_click=clear_list, args=("history",))
+        if ss.history:
+            st.pills("검색 기록", ss.history, selection_mode="single", key="hist_" + str(ss.hist_n),
+                     on_change=on_pick_history, label_visibility="collapsed")
+        else:
+            st.markdown('<div class="empty">최근 검색한 약품이 여기에 표시됩니다.</div>', unsafe_allow_html=True)
+
+
+def page_analyzing():
+    if not ss.files or not ss.applied:
+        ss.page = "home"
+        st.rerun()
+
+    f = ss.files[0]
+    extra = " 외 %d장" % (len(ss.files) - 1) if len(ss.files) > 1 else ""
+    st.markdown(
+        '<div class="analyzing">'
+        '<div class="scanbox"><img src="data:image/jpeg;base64,' + f["thumb"] + '"/></div>'
+        '<div class="an-t">이미지 분석 중입니다<span class="dots"><b>.</b><b>.</b><b>.</b></span></div>'
+        '<div class="an-s">' + esc(ss.applied["name"]) + extra
+        + "<br>처음 실행할 때는 시간이 조금 더 걸려요</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    result, error = None, ""
+    try:
+        merged = {}
+        for file in ss.files:
+            merge_lines(merged, ocr_pass(file["data"], 0, ss.precise, ss.rotate))
+        result = evaluate(ss.applied, list(merged.values()))
+        if ss.precise and not result["genuine"]:
+            for file in ss.files:
+                merge_lines(merged, ocr_pass(file["data"], 1, ss.precise, ss.rotate))
+            result = evaluate(ss.applied, list(merged.values()))
+    except Exception as e:
+        error = "이미지 분석에 실패했습니다. 다른 사진으로 다시 시도해주세요. (%s)" % e
+    gc.collect()
+
+    if error:
+        ss.err = error
+        ss.page = "home"
+    else:
+        ss.result = result
+        ss.analyses = ([result] + ss.analyses)[:30]
+        ss.page = "result"
+    st.rerun()
+
+
+def page_result():
+    r = ss.result
+    if not r:
+        ss.page = "home"
+        st.rerun()
+    topbar(back="home")
+
+    rate = r["rate"]
+    ing_cls = "ok" if r["ing_ok"] else "bad"
+    rate_cls = "ok" if rate >= 80 else "bad"
+    rate_color = "var(--green)" if rate >= 80 else "var(--red)"
+    verdict = "정품 (GENUINE)" if r["genuine"] else "가품 의심 (COUNTERFEIT)"
+    v_cls = "ok" if r["genuine"] else "bad"
+
+    st.markdown(
+        '<div class="r-title">성분 대조 및 판정 결과</div>'
+        '<div class="r-drug">' + esc(r["drug"]["name"]) + "</div>"
+        '<div class="r-item"><span class="r-label">주성분 일치 여부</span>'
+        '<span class="r-value ' + ing_cls + '">' + ("일치" if r["ing_ok"] else "불일치") + "</span></div>"
+        '<div class="r-item"><span class="r-label">성분 일치율</span>'
+        '<span class="r-value ' + rate_cls + '">%.1f%%</span>' % rate
+        + '<div class="bar"><i style="width:%.0f%%;background:%s"></i></div></div>' % (min(rate, 100), rate_color)
+        + '<div class="r-item"><span class="r-label">최종 판정</span>'
+        '<span class="r-value sm ' + v_cls + '">' + verdict + "</span></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.button("상세 항목별 대조 리포트 확인하기", type="primary", key="btn_report", on_click=go, args=("report",))
+    st.button("메인화면으로 돌아가기", key="light_home1", on_click=reset_home)
+
+
+def page_report():
+    r = ss.result
+    if not r:
+        ss.page = "home"
+        st.rerun()
+    topbar(back="result")
+    d = r["drug"]
+
+    def tag(ok, yes="일치", no="불일치"):
+        return '<span class="%s">%s</span>' % ("ok" if ok else "bad", yes if ok else no)
+
+    rows = []
+    if has_code(d["code"]):
+        rows.append(("품목기준코드", esc(d["code"]),
+                     esc(d["code"]) if r["code_ok"] else "미검출",
+                     tag(r["code_ok"], "일치", "확인 필요")))
+    per_list = r["per"] or [{"name": "-", "score": 0, "found": ""}]
+    for i, p in enumerate(per_list):
+        label = "주성분명" if len(r["per"]) <= 1 else "주성분 %d" % (i + 1)
+        if p["found"]:
+            found = esc(p["found"]) + '<span class="pct">유사도 %.0f%%</span>' % (p["score"] * 100)
+        else:
+            found = "미검출"
+        rows.append((label, esc(p["name"]), found, tag(p["score"] >= 0.8)))
+    rows.append(("제조사", esc(d["manufacturer"] or "-"),
+                 esc(r["manuf_found"]) if r["manuf_found"] else "미검출",
+                 tag(r["manuf_score"] >= 0.8, "일치", "참고")))
+    rows.append(("판정 상태", "기준 규격",
+                 '<span class="ok">✓ 적합</span>' if r["genuine"] else '<span class="bad">✕ 부적합</span>',
+                 tag(r["genuine"], "통과", "경고")))
+
+    body = "".join(
+        '<tr><td class="k">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % row for row in rows
+    )
+    st.markdown(
+        '<div class="rpt-h">상세 항목별 대조 리포트</div>'
+        '<table class="rpt"><colgroup><col style="width:22%"><col style="width:28%">'
+        '<col style="width:32%"><col style="width:18%"></colgroup>'
+        "<thead><tr><th>검증 항목</th><th>기준 DB (정품)</th><th>이미지 OCR 검출값</th><th>검증 결과</th></tr></thead>"
+        "<tbody>" + body + "</tbody></table>"
+        '<div class="fine">사진 속 글자 인식(OCR) 결과를 기준 데이터와 비교한 참고용 판정입니다. '
+        "조명·초점에 따라 결과가 달라질 수 있으니, 의심되면 약사 또는 의약품안전나라에서 한 번 더 확인해주세요.</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.button("메인화면으로 돌아가기", key="light_home2", on_click=reset_home)
+
+
+def page_menu():
+    with st.container(key="drawer"):
+        topbar()
+        st.button("약품 성분 검색/판별", icon=":material/search:", key="dr_home", on_click=go, args=("home",))
+        label = "즐겨찾기" + ("  %d" % len(ss.bookmarks) if ss.bookmarks else "")
+        st.button(label, icon=":material/bookmark:", key="dr_fav", on_click=go, args=("favorites",))
+
+    with st.container(key="drawer_bottom"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.button("마이메뉴", key="db_my", on_click=go, args=("mymenu",))
+        with c2:
+            st.button("설정", key="db_set", on_click=go, args=("settings",))
+
+
+def page_favorites():
+    topbar("즐겨찾기", back="menu")
+    if not ss.bookmarks:
+        st.markdown(
+            '<div class="empty">검색 결과에서 북마크 아이콘을 누르면 여기에 모아볼 수 있어요.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="sec"><b>즐겨찾기한 약품 %d</b><small>눌러서 바로 사진 대조</small></div>'
+            % len(ss.bookmarks),
+            unsafe_allow_html=True,
+        )
+        with st.container(key="favlist"):
+            for i, b in enumerate(ss.bookmarks):
+                drug_row(b, i, "f")
+
+
+def page_mymenu():
+    topbar("마이메뉴", back="home")
+    st.markdown('<div class="sec"><b>최근 판별 기록</b></div>', unsafe_allow_html=True)
+    if not ss.analyses:
+        st.markdown('<div class="empty">아직 판별한 기록이 없습니다.</div>', unsafe_allow_html=True)
+    for i, r in enumerate(ss.analyses):
+        mark = "정품" if r["genuine"] else "가품 의심"
+        with st.container(key="hrow_%d" % i):
+            st.button("%s  ·  %s %.0f%%  ·  %s" % (r["drug"]["name"], mark, r["rate"], r["time"]),
+                      key="open_%d" % i, on_click=open_result, args=(r,))
+
+
+def page_settings():
+    topbar("설정", back="home")
+    st.markdown('<div class="set-sec">인식</div>', unsafe_allow_html=True)
+    st.toggle("정밀 인식 모드", value=ss.precise, key="w_precise", on_change=set_opt, args=("precise",),
+              help="성분을 못 찾으면 그림자를 지운 사진으로 한 번 더 읽습니다. 끄면 빨라지지만 정확도가 조금 떨어져요.")
+    st.toggle("회전된 사진 보정", value=ss.rotate, key="w_rotate", on_change=set_opt, args=("rotate",),
+              help="옆으로 누운 라벨 사진도 읽도록 회전해서 확인합니다. 시간이 더 걸려요.")
+    st.markdown('<div class="set-sec">데이터</div>', unsafe_allow_html=True)
+    st.button("검색 기록 삭제", key="clr_h", on_click=clear_list, args=("history",))
+    st.button("즐겨찾기 비우기", key="clr_b", on_click=clear_list, args=("bookmarks",))
+    st.button("판별 기록 삭제", key="clr_a", on_click=clear_list, args=("analyses",))
+    st.markdown(
+        '<div class="fine">등록 약품 %s건 · 식약처 표준 데이터 기반<br>'
+        "기록과 즐겨찾기는 이 브라우저 세션 동안만 유지됩니다.</div>" % format(len(DF), ","),
+        unsafe_allow_html=True,
+    )
+
+
+PAGES = {
+    "home": page_home, "analyzing": page_analyzing, "result": page_result, "report": page_report,
+    "menu": page_menu, "favorites": page_favorites, "mymenu": page_mymenu, "settings": page_settings,
+}
+PAGES.get(ss.page, page_home)()
