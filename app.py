@@ -320,17 +320,26 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .set-sec{ font-size:13px; color:var(--mute); font-weight:600; margin:18px 0 2px; }
 .stToggle label p{ font-size:15px; color:var(--ink); }
 
-/* 결과 화면 버튼 우측 정렬 */
+/* 결과 화면 버튼 우측 정렬 및 크기 조절 */
 .st-key-btn_report, 
 [class*="st-key-light_"] {
     display: flex !important;
     justify-content: flex-end !important;
+    width: 100% !important;
 }
+
+.st-key-btn_report .stButton, 
+[class*="st-key-light_"] .stButton {
+    display: flex !important;
+    justify-content: flex-end !important;
+    width: 100% !important;
+}
+
 .st-key-btn_report .stButton > button, 
 [class*="st-key-light_"] .stButton > button {
     margin-left: auto !important;
     margin-right: 0 !important;
-    min-width: 220px !important;
+    width: 240px !important; /* 👈 버튼의 가로 길이를 원하시는 크기로 조절하세요 */
 }
 </style>
 """
