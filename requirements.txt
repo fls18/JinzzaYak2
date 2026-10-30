@@ -3,6 +3,7 @@ torch
 torchvision
 streamlit>=1.40
 easyocr
+rapidfuzz
 opencv-python-headless
 pillow
 pandas
