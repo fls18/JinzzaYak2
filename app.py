@@ -325,6 +325,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-bottomnav [data-testid="stHorizontalBlock"]{ 
     width:100% !important; 
     gap: 0 !important; 
+    padding-left: 15% !important;
     justify-content: space-between !important; 
 }
 .st-key-bottomnav [data-testid="stColumn"], .st-key-bottomnav [data-testid="column"]{
