@@ -429,11 +429,9 @@ def run_ocr_bytes(img_bytes, mode=0, min_conf=MIN_CONF):
 # =====================================================================
 # 2. 판별 (사진 글자 <-> 식약처 허가정보)  [A파일]
 # =====================================================================
-STRICT = 90        # 제조사 점수가 이 이상이어야 '확인됨'
-LOOSE = 70         # 제조사 점수가 이 미만이면 '불일치'
+STRICT = 90        # 제조사 점수가 이 이상이면 리포트에 '검출' (판정에는 안 씀)
 INGR_PASS = 75     # 성분 하나가 '있다'고 인정할 점수
 INGR_RATIO = 0.5   # 성분 중 이 비율 이상 확인되어야 통과
-MAKER_REQUIRED = False   # True면 제조사를 못 읽었을 때도 '확인 필요'
 
 COLUMN_MAP = {"Product Name": "약품명", "Active Ingredient": "주성분", "Manufacturer": "제조사"}
 
@@ -576,54 +574,69 @@ def search_names(query, db, limit=5):
     return [(i, db.at[i, "약품명"], db.at[i, "제조사"]) for _, _, i in res]
 
 
-def find_other_company(full, db, expected):
-    """포장지에 '허가 제조사가 아닌' 다른 제약사 이름이 적혀 있는지"""
-    exp = norm(expected)
-    for c in db["제조사"].unique():
-        n = norm(c)
-        if len(n) >= 4 and n != exp and n in full:
-            return c
-    return None
+NAME_PASS = 75       # 제품명이 '있다'고 인정할 점수
+MIN_TEXT_FOR_FAKE = 30   # 사진에서 이만큼 이상 읽었는데 둘 다 안 맞을 때만 '가품 의심'
+_FORM_RE = re.compile(r"(필름코팅정|서방정|장용정|츄어블정|연질캡슐|경질캡슐|캡슐|정|시럽|현탁액|액|산|과립|주사액|주)$")
+
+
+def name_candidates(name):
+    """제품명을 비교할 여러 표기: 원래 이름, 괄호/함량 제거, 제형(정·캡슐 등) 제거"""
+    raw = str(name)
+    no_paren = re.sub(r"\(.*?\)", " ", raw)
+    no_unit = _UNIT_RE.sub(" ", no_paren)
+    out = []
+    for n in [raw, no_paren, no_unit]:
+        k = norm(n)
+        if len(k) >= 2:
+            out.append(k)
+            short = _FORM_RE.sub("", k)
+            if len(short) >= 2:
+                out.append(short)
+    return list(dict.fromkeys(out))
+
+
+def name_score(name, texts, full):
+    """제품명이 사진에 있는지 점수(0~100)"""
+    return max([match_score(c, texts, full) for c in name_candidates(name)] + [0])
 
 
 def verify(texts, db, idx):
-    """사용자가 고른 약(idx)과 사진 속 글자(texts)를 비교"""
+    """사용자가 고른 약(idx)과 사진 속 글자(texts)를 비교 - 제품명 + 주성분으로 판정, 제조사는 참고"""
     full = norm(" ".join(texts))
     if len(full) < 2:
         return {"status": "error",
                 "message": "사진에서 글자를 인식하지 못했어요. 더 밝고 선명한 사진을 올려주세요."}
 
     row = db.iloc[idx]
-    entp_score = match_score(row["제조사"], texts, full)
-    maker_ok = entp_score >= STRICT
-    other = None if maker_ok else find_other_company(full, db, row["제조사"])
+    n_score = name_score(row["약품명"], texts, full)
+    name_ok = n_score >= NAME_PASS
 
     ingrs = [i.strip() for i in str(row["주성분"]).split(",") if i.strip()]
     hit = sum(ingr_score(i, texts, full) >= INGR_PASS for i in ingrs)
     ingr_ratio = hit / len(ingrs) if ingrs else 0
+    ingr_ok = ingr_ratio >= INGR_RATIO
 
-    if maker_ok:
-        maker_status = "확인됨"
-    elif other and entp_score < LOOSE:
-        maker_status = f"다른 제조사 발견 ({other})"
-    else:
-        maker_status = "사진에서 찾지 못함"
-    detail = {"제조사 확인": maker_status}
+    # 제조사는 판정에 쓰지 않고 리포트에 참고로만 표시
+    entp_score = match_score(row["제조사"], texts, full)
+    detail = {"제조사 확인": "확인됨" if entp_score >= STRICT else "사진에서 찾지 못함",
+              "제품명 점수": n_score}
 
-    if other and entp_score < LOOSE:
+    if name_ok and ingr_ok:
+        return {"status": "genuine", "detail": detail,
+                "message": "제품명과 주성분이 식약처 허가정보와 일치해요. 정품일 가능성이 높아요."}
+    if name_ok:
+        return {"status": "warning", "detail": detail,
+                "message": "제품명은 일치하지만 주성분을 확인하지 못했어요. "
+                           "'원료약품 및 분량'이 적힌 부분을 가까이서 다시 찍어주세요."}
+    if ingr_ok:
+        return {"status": "warning", "detail": detail,
+                "message": "주성분은 일치하지만 제품명을 확인하지 못했어요. "
+                           "제품명이 보이는 앞면 사진도 함께 올려주세요."}
+    if len(full) >= MIN_TEXT_FOR_FAKE:
         return {"status": "fake", "detail": detail,
-                "message": f"포장지에 허가 제조사가 아닌 '{other}'이(가) 적혀 있어요. 위조 의심!"}
-    if ingr_ratio < INGR_RATIO:
-        return {"status": "warning", "detail": detail,
-                "message": "주성분 표기가 허가정보와 일치하지 않아요. 성분이 적힌 부분을 가까이서 다시 찍어주세요."}
-    if MAKER_REQUIRED and not maker_ok:
-        return {"status": "warning", "detail": detail,
-                "message": "제조사 표기를 확인하지 못했어요. 제조사가 적힌 부분을 가까이서 선명하게 다시 찍어주세요."}
-    if maker_ok:
-        msg = "제조사와 주성분이 식약처 허가정보와 일치해요. 정품일 가능성이 높아요."
-    else:
-        msg = "주성분이 식약처 허가정보와 일치해요. (제조사 표기는 사진에서 확인되지 않았어요)"
-    return {"status": "genuine", "detail": detail, "message": msg}
+                "message": "사진 속 제품명과 주성분이 모두 허가정보와 달라요. 다른 제품이거나 위조품일 수 있어요."}
+    return {"status": "warning", "detail": detail,
+            "message": "사진에서 읽은 글자가 너무 적어요. 제품명과 성분이 잘 보이게 가까이서 다시 찍어주세요."}
 
 
 def search_drugs(keyword, db):
@@ -1009,12 +1022,16 @@ def page_result():
     ratio = r["ratio"]
     ingr_ok = ratio >= INGR_RATIO
     ing_cls = "ok" if ingr_ok else "bad"
+    name_ok = r["detail"].get("제품명 점수", 0) >= NAME_PASS
+    name_cls = "ok" if name_ok else "bad"
     bar_color = "var(--green)" if ingr_ok else "var(--red)"
     msg_cls = "notice" if r["status"] == "genuine" else "err"
 
     st.markdown(
         '<div class="r-title">성분 대조 및 최종 판정 결과</div>'
         '<div class="r-drug">' + esc(r["drug"]["name"]) + "  ·  " + esc(r["drug"]["maker"]) + "</div>"
+        '<div class="r-item"><span class="r-label">제품명 일치 여부</span>'
+        '<span class="r-value ' + name_cls + '">' + ("일치" if name_ok else "불일치") + "</span></div>"
         '<div class="r-item"><span class="r-label">주성분 일치 여부</span>'
         '<span class="r-value ' + ing_cls + '">' + ("일치" if ingr_ok else "불일치") + "</span></div>"
         '<div class="r-item"><span class="r-label">성분 일치율 (%d/%d개)</span>' % (r["n_hit"], r["n_ingr"])
@@ -1041,16 +1058,13 @@ def page_report():
     def tag(ok, yes="일치", no="불일치"):
         return '<span class="%s">%s</span>' % ("ok" if ok else "bad", yes if ok else no)
 
-    maker_status = r["detail"].get("제조사 확인", "사진에서 찾지 못함")
-    if maker_status.startswith("확인됨"):
-        maker_ocr, maker_res = "검출", tag(True)
-    elif maker_status.startswith("다른"):
-        maker_ocr, maker_res = esc(maker_status), tag(False)
-    else:
-        maker_ocr, maker_res = "미검출", "확인 불가"
-
-    rows = [("제품명", esc(d["name"]), "사용자 선택", tag(True, "확인")),
-            ("제조사", esc(d["maker"] or "-"), maker_ocr, maker_res)]
+    n_sc = r["detail"].get("제품명 점수", 0)
+    name_hit = n_sc >= NAME_PASS
+    maker_found = r["detail"].get("제조사 확인", "") == "확인됨"
+    rows = [("제품명", esc(d["name"]),
+             ("검출" if name_hit else "미검출") + '<span class="pct">점수 %d</span>' % n_sc,
+             tag(name_hit)),
+            ("제조사", esc(d["maker"] or "-"), "검출" if maker_found else "미검출", "참고")]
     for ing, hit, sc, line in r["hits"]:
         ocr_val = (esc(line) if line and sc >= 60 else "미검출") + '<span class="pct">점수 %d</span>' % sc
         rows.append(("주성분", esc(ing), ocr_val, tag(hit)))
