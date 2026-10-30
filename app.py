@@ -403,10 +403,10 @@ def search_drugs(q: str, limit=50):
 # =========================================================
 # OCR
 # =========================================================
-# 기존의 @st.cache_resource로 되어 있던 OCR 로드 부분을 아래 코드로 변경해주세요.
+@st.cache_resource(show_spinner=False)
 def get_ocr_reader():
+    import easyur # 또는 easyocr
     import easyocr
-    # 캐시를 쓰지 않고 필요할 때 안전하게 불러오기
     return easyocr.Reader(["ko", "en"], gpu=False)
 
 def preprocess(pil: Image.Image, precise: bool):
