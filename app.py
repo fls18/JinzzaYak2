@@ -132,7 +132,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     width: auto !important;
 }
 .st-key-searchrow .stFormSubmitButton > button{
-    width: 88px !important; /* 버튼 가로 폭 */
+    width: 70px !important; /* 버튼 가로 폭 */
     min-height: 35px !important; 
     height: 46px !important; 
     border-radius: 12px !important;
