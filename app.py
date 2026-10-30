@@ -182,9 +182,26 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   font-size:13px; font-weight:500; justify-content:flex-end; padding:0;
 }
 
-/* 약품 목록 */
-.st-key-reslist{ background:var(--bg); border-radius:14px; padding:4px 10px; }
-.st-key-favlist{ background:var(--bg); border-radius:14px; padding:4px 10px; }
+/* 약품 목록 (위쪽 간격을 줘서 아래로 내림) */
+/* 검색된 약품 목록: 내용물 크기에 맞게 자동으로 줄어들도록 수정 */
+.st-key-reslist{ 
+    background: var(--bg); 
+    border-radius: 14px; 
+    padding: 4px 10px; 
+    margin-top: 8px;
+    height: auto !important; 
+    max-height: 330px !important; 
+    overflow-y: auto !important;
+}
+.st-key-favlist{ 
+    background: var(--bg); 
+    border-radius: 14px; 
+    padding: 4px 10px; 
+    margin-top: 8px;
+    height: auto !important; 
+    max-height: 330px !important; 
+    overflow-y: auto !important;
+}
 [class*="st-key-row_"], [class*="st-key-hrow_"]{ border-bottom:1px solid #E1E4E8; }
 [class*="st-key-row_"]:last-child, [class*="st-key-hrow_"]:last-child{ border-bottom:none; }
 [class*="st-key-res_"] .stButton > button, [class*="st-key-open_"] .stButton > button{
