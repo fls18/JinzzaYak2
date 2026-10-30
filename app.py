@@ -316,7 +316,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-db_my .stButton > button, .st-key-db_my button > div{ justify-content:flex-start; }
 .st-key-db_set .stButton > button, .st-key-db_set button > div{ justify-content:flex-end; }
 
-/* 하단 탭바 3등분 균등 정렬 */
+/* 하단 탭바 3등분 및 아이콘 위 / 글자 아래 세로 정렬 */
 .st-key-bottomnav{
     position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:440px;
     background:rgba(255,255,255,.96); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
@@ -340,15 +340,43 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .st-key-bottomnav .stButton > button{
     width: 100% !important; 
-    justify-content: center; 
-    text-align: center;
-    border: none !important; background: transparent !important; color: var(--mute) !important;
-    min-height: 54px; font-size: 12px; font-weight: 600; padding: 0;
+    height: 54px !important;
+    min-height: 54px !important;
+    border: none !important; 
+    background: transparent !important; 
+    color: var(--mute) !important;
+    font-size: 11px !important; 
+    font-weight: 600 !important; 
+    padding: 0 !important;
 }
-.st-key-bottomnav button > div{ flex-direction:column !important; align-items:center !important; justify-content:center !important; gap:1px; width:100%; }
-.st-key-bottomnav button p{ text-align:center; margin:0; }
-.st-key-bottomnav [data-testid="stIconMaterial"]{ font-size:24px; }
-.st-key-bottomnav [data-testid="stBaseButton-primary"]{ color:var(--red) !important; }
+
+/* 핵심: 아이콘과 글자를 위아래(세로)로 배치하고 간격 조절 */
+.st-key-bottomnav .stButton > button div[data-testid="stVerticalBlock"],
+.st-key-bottomnav button > div{ 
+    display: flex !important;
+    flex-direction: column !important; 
+    align-items: center !important; 
+    justify-content: center !important; 
+    gap: 2px !important; 
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.st-key-bottomnav button p{ 
+    text-align: center !important; 
+    margin: 0 !important; 
+    font-size: 11px !important;
+    line-height: 1 !important;
+}
+.st-key-bottomnav [data-testid="stIconMaterial"]{ 
+    font-size: 22px !important; 
+    line-height: 1 !important;
+}
+.st-key-bottomnav [data-testid="stBaseButton-primary"],
+.st-key-bottomnav [data-testid="stBaseButton-primary"] p,
+.st-key-bottomnav [data-testid="stBaseButton-primary"] [data-testid="stIconMaterial"]{ 
+    color: var(--red) !important; 
+}
 
 /* 설정 */
 .set-sec{ font-size:13px; color:var(--mute); font-weight:600; margin:18px 0 2px; }
