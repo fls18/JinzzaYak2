@@ -645,7 +645,9 @@ def search_drugs(q, limit=50):
 MAX_SIDE = 2000   # 사진 최대 크기
 MIN_SIDE = 1600   # 이보다 작으면 키워서 작은 글씨도 읽히게
 MAG_RATIO = 1.0
-MIN_CONF = 0.1    # 한글은 확신도가 낮게 나와도 맞게 읽은 경우가 많음 (오타는 점수로 보정)
+MIN_CONF = 0.1    # 긴 줄은 확신도가 낮아도 살림 (한글은 맞게 읽어도 확신도가 낮게 나오는 경우가 많음)
+SHORT_CONF = 0.4  # 3글자 이하 짧은 조각은 이 이상일 때만 살림 (짧은 조각은 대부분 잘못 읽은 것)
+SHOW_CONF = 0.3   # '인식된 텍스트 보기'에는 이 이상만 보여줌 (판정에는 전부 사용)
 
 
 @st.cache_resource(show_spinner=False)
@@ -692,7 +694,7 @@ def ocr_pass(data, variant, precise, rotate):
               text_threshold=0.6, low_text=0.3, contrast_ths=0.1, adjust_contrast=0.6)
     if variant >= 1 and precise:
         kw.update(decoder="beamsearch", beamWidth=5)
-    if rotate or variant == 2:
+    if rotate:
         kw["rotation_info"] = [90, 270]
     img = preprocess(Image.open(io.BytesIO(data)), variant)
     out = []
@@ -700,7 +702,10 @@ def ocr_pass(data, variant, precise, rotate):
     with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
         for _, text, conf in reader.readtext(img, **kw):
             text = text.strip()
-            if norm(text) and conf >= MIN_CONF:
+            n = len(norm(text))
+            if n < 2:
+                continue
+            if conf >= MIN_CONF and (n > 3 or conf >= SHORT_CONF):
                 out.append([text, float(conf)])
     del img
     gc.collect()
@@ -744,7 +749,8 @@ def evaluate(drug, lines):
         "drug": drug, "per": per, "ing_ok": ing_ok, "code_ok": code_ok,
         "manuf_score": m_sc / 100.0, "manuf_found": m_line if m_sc >= 60 else "",
         "rate": avg, "genuine": name_ok and ing_ok,
-        "lines": lines, "time": datetime.now().strftime("%m.%d %H:%M"),
+        "lines": [ln for ln in lines if ln[1] >= SHOW_CONF],
+        "time": datetime.now().strftime("%m.%d %H:%M"),
     }
 
 
