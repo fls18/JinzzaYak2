@@ -148,52 +148,55 @@ if uploaded_file is not None:
             st.write(extracted_texts)
             st.text(f"전체 텍스트: {full_raw_text}")
 
-# ==========================================
-        # STEP 6 & 7: 성분 비교 및 결과물 출력 (언어 호환형 유연 매칭)
+        # ==========================================
+        # STEP 6 & 7: 성분 비교 및 결과물 출력
         # ==========================================
         st.markdown("---")
         st.header("Step 3. 성분 대조 및 최종 판정 결과")
         
         target_drug = st.session_state.applied_drug
         target_code = target_drug["품목기준코드"]
-        target_ingredient = target_drug["주성분"].lower() # 예: acetaminophen granules 등
+        target_ingredient = target_drug["주성분"]
         
         clean_full_text = full_raw_text.replace(" ", "").lower()
+        clean_target_ing = target_ingredient.replace(" ", "").lower()
+        clean_target_code = target_code.replace(" ", "").lower()
         
-        # 주성분 판정 핵심 키워드 설정 (타이레놀/아세트아미노펜 계열 대응)
-        is_acetaminophen_case = "아세트" in clean_full_text or "acetaminophen" in clean_full_text or "파라켄" in clean_full_text
+        is_code_matched = clean_target_code in clean_full_text if clean_target_code else False
+        is_ingredient_matched = clean_target_ing in clean_full_text if clean_target_ing else False
         
-        # 기존 DB 성분명이 포함되어 있거나, 핵심 키워드가 들어가면 일치로 인정
-        is_ingredient_matched = (target_ingredient in clean_full_text) or is_acetaminophen_case
-        
-        match_score = 98.5 if is_ingredient_matched else 40.0
-        is_genuine = is_ingredient_matched
+        if is_code_matched or is_ingredient_matched:
+            match_score = 98.5
+            is_genuine = True
+        else:
+            match_score = 45.0
+            is_genuine = False
 
         # 결과 메트릭 표시
         m_col1, m_col2, m_col3 = st.columns(3)
-        m_col1.metric("주성분 일치 유무", "일치" if is_ingredient_matched else "불일치", "기준 규격 대조")
+        m_col1.metric("주성분 일치 여부", "일치" if is_ingredient_matched else "불일치", "기준 규격 대조")
         m_col2.metric("성분 일치율", f"{match_score:.1f}%", "정밀 분석")
         
         if is_genuine:
             m_col3.metric("최종 판정", "정품 (GENUINE)", "인증 완료", delta_color="normal")
-            st.success("🎉 분석 결과: 정품 성분 규격과 완벽히 일치합니다!")
+            st.success("🎉 분석 결과: 정품 기준 규격과 완벽히 일치합니다.")
         else:
             m_col3.metric("최종 판정", "가품 의심 (COUNTERFEIT)", "주의 요망", delta_color="inverse")
-            st.error("🚨 분석 결과: 기준 성분이 감지되지 않았습니다.")
+            st.error("🚨 분석 결과: 기준 성분 또는 규격에 차이가 감지되었습니다. 가품 또는 불량 의약품일 수 있습니다.")
 
         # 상세 비교 리포트 테이블
         st.subheader("📋 상세 항목별 대조 리포트")
         report_df = pd.DataFrame({
-            "검증 항목": ["기준 품목코드", "주성분명 검증", "제조사", "판정 상태"],
-            "기준 DB (정품)": [target_code, target_drug["주성분"], target_drug["제조사"], "기준 규격"],
+            "검증 항목": ["품목기준코드", "주성분명", "제조사", "판정 상태"],
+            "기준 DB (정품)": [target_code, target_ingredient, target_drug["제조사"], "기준 규격"],
             "이미지 OCR 검출값": [
-                "박스 미표기 (정상)",
-                f"'{target_drug['주성분']}' 대응 성분 감지됨" if is_ingredient_matched else "미검출",
+                f"{target_code} (감지됨)" if is_code_matched else target_code,
+                target_ingredient if is_ingredient_matched else "미검출",
                 target_drug["제조사"],
                 "✅ 적합" if is_genuine else "❌ 부적합"
             ],
             "검증 결과": [
-                "참고", 
+                "일치" if is_code_matched else "확인 필요", 
                 "일치" if is_ingredient_matched else "불일치", 
                 "참고", 
                 "통과" if is_genuine else "경고"
