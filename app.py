@@ -316,21 +316,34 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .st-key-db_my .stButton > button, .st-key-db_my button > div{ justify-content:flex-start; }
 .st-key-db_set .stButton > button, .st-key-db_set button > div{ justify-content:flex-end; }
 
-/* 하단 탭바 */
+/* 하단 탭바 3등분 균등 정렬 */
 .st-key-bottomnav{
-  position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:440px;
-  background:rgba(255,255,255,.96); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-  border-top:1px solid var(--line); padding:4px 12px calc(4px + env(safe-area-inset-bottom)); z-index:100;
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:440px;
+    background:rgba(255,255,255,.96); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border-top:1px solid var(--line); padding:4px 12px calc(4px + env(safe-area-inset-bottom)); z-index:100;
 }
-.st-key-bottomnav [data-testid="stHorizontalBlock"]{ width:120% !important; gap:0 !important; }
+.st-key-bottomnav [data-testid="stHorizontalBlock"]{ 
+    width:100% !important; 
+    gap: 0 !important; 
+    justify-content: space-between !important; 
+}
 .st-key-bottomnav [data-testid="stColumn"], .st-key-bottomnav [data-testid="column"]{
-  flex:1 1 0 !important; width:33.333% !important; display:flex; justify-content:center;
+    flex: 1 1 0 !important; 
+    width: 33.333% !important; 
+    display: flex; 
+    justify-content: center;
 }
-.st-key-bottomnav .stButton{ width:100% !important; display:flex; justify-content:center; }
+.st-key-bottomnav .stButton{ 
+    width: 100% !important; 
+    display: flex; 
+    justify-content: center; 
+}
 .st-key-bottomnav .stButton > button{
-  width:100% !important; justify-content:center; text-align:center;
-  border:none !important; background:transparent !important; color:var(--mute) !important;
-  min-height:54px; font-size:12px; font-weight:600; padding:0;
+    width: 100% !important; 
+    justify-content: center; 
+    text-align: center;
+    border: none !important; background: transparent !important; color: var(--mute) !important;
+    min-height: 54px; font-size: 12px; font-weight: 600; padding: 0;
 }
 .st-key-bottomnav button > div{ flex-direction:column !important; align-items:center !important; justify-content:center !important; gap:1px; width:100%; }
 .st-key-bottomnav button p{ text-align:center; margin:0; }
