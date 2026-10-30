@@ -807,7 +807,7 @@ def page_home():
     applied = ss.applied
     with st.container(key="searchrow"):
         with st.form("search_form", border=False):
-            c1, c2 = st.columns([2.7, 1.3], vertical_alignment="center")
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
                 st.text_input("약품명", key="q", placeholder="검색할 약품명을 입력하세요",
                               label_visibility="collapsed")
