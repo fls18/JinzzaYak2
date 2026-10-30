@@ -322,7 +322,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:rgba(255,255,255,.96); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   border-top:1px solid var(--line); padding:4px 12px calc(4px + env(safe-area-inset-bottom)); z-index:100;
 }
-.st-key-bottomnav [data-testid="stHorizontalBlock"]{ width:80% !important; gap:0 !important; }
+.st-key-bottomnav [data-testid="stHorizontalBlock"]{ width:120% !important; gap:0 !important; }
 .st-key-bottomnav [data-testid="stColumn"], .st-key-bottomnav [data-testid="column"]{
   flex:1 1 0 !important; width:33.333% !important; display:flex; justify-content:center;
 }
