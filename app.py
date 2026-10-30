@@ -30,6 +30,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+/* 결과 화면의 버튼 두 개를 우측으로 정렬 */
+.st-key-btn_report, 
+[class*="st-key-light_"] {
+    display: flex !important;
+    justify-content: flex-end !important;
+}
+
+.st-key-btn_report .stButton > button, 
+[class*="st-key-light_"] .stButton > button {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    width: auto !important; /* 필요에 따라 버튼 크기를 내용에 맞게 하려면 이 줄을 유지하고, 꽉 채우려면 지우세요 */
+    min-width: 220px;
+}
+
 ss = st.session_state
 esc = html.escape
 
@@ -980,21 +995,6 @@ def page_report():
         "조명·초점에 따라 결과가 달라질 수 있으니, 의심되면 약사 또는 의약품안전나라에서 한 번 더 확인해주세요.</div>",
         unsafe_allow_html=True,
     )
-
-    with st.expander("인식된 텍스트 보기 (%d줄)" % len(r["lines"])):
-        if r["lines"]:
-            st.markdown(
-                "<br>".join(
-                    esc(t) + ' <span style="color:#B0B8C1;font-size:11px">%.2f</span>' % c
-                    for t, c in r["lines"]
-                ),
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<div class="empty">인식된 텍스트가 없습니다. 글자가 크고 선명하게 나오도록 다시 찍어주세요.</div>',
-                unsafe_allow_html=True,
-            )
 
     st.button("메인화면으로 돌아가기", key="light_home2", on_click=reset_home)
 
