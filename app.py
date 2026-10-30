@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 진짜약 (Jinzzayak) - 약 성분표 OCR 대조 앱
-requirements: streamlit>=1.40, easyocr, rapidfuzz, opencv-python-headless, pillow, pandas, numpy
+requirements: streamlit>=1.40, easyocr, pytesseract, rapidfuzz, opencv-python-headless, pillow, pandas, numpy
+packages.txt (서버 설치): tesseract-ocr, tesseract-ocr-kor
 """
 import base64
 import contextlib
@@ -89,15 +90,15 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 
 /* 검색 폼 전체 영역 */
-[data-testid="stForm"]{ 
-    border: none !important; 
-    padding: 0 !important; 
+[data-testid="stForm"]{
+    border: none !important;
+    padding: 0 !important;
 }
 
 /* 검색창과 버튼을 감싸는 블록: 간격(gap) 조절 가능 */
-.st-key-searchrow [data-testid="stHorizontalBlock"]{ 
+.st-key-searchrow [data-testid="stHorizontalBlock"]{
     display: flex !important;
-    align-items: center !important; 
+    align-items: center !important;
     gap: 12px !important; /* 회색박스와 빨간버튼 사이 간격 */
 }
 
@@ -107,22 +108,22 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .stTextInput [data-baseweb="input"]{
     height: 46px !important; /* 위아래 높이를 슬림하게 조절 */
-    border: 1.5px solid var(--line) !important; 
+    border: 1.5px solid var(--line) !important;
     border-radius: 12px !important;
-    background: #fff !important; 
+    background: #fff !important;
     box-shadow: none !important;
     display: flex !important;
     align-items: center !important;
 }
-.stTextInput [data-baseweb="input"]:focus-within{ 
-    border-color: var(--ink) !important; 
+.stTextInput [data-baseweb="input"]:focus-within{
+    border-color: var(--ink) !important;
 }
 .stTextInput input{
-    font-size: 15px !important; 
-    color: var(--ink) !important; 
+    font-size: 15px !important;
+    color: var(--ink) !important;
     padding: 0 14px !important;
-    background: transparent !important; 
-    border: none !important; 
+    background: transparent !important;
+    border: none !important;
     outline: none !important;
 }
 .stTextInput input::placeholder{ color: #B0B8C1 !important; }
@@ -133,12 +134,12 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 }
 .st-key-searchrow .stFormSubmitButton > button{
     width: 65px !important; /* 버튼 가로 폭 */
-    min-height: 35px !important; 
-    height: 46px !important; 
+    min-height: 35px !important;
+    height: 46px !important;
     border-radius: 12px !important;
-    font-size: 15px !important; 
+    font-size: 15px !important;
     font-weight: 600 !important;
-    background: var(--red) !important; 
+    background: var(--red) !important;
     color: #fff !important;
     border: none !important;
     box-shadow: none !important;
@@ -184,22 +185,22 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 
 /* 약품 목록 (위쪽 간격을 줘서 아래로 내림) */
 /* 검색된 약품 목록: 내용물 크기에 맞게 자동으로 줄어들도록 수정 */
-.st-key-reslist{ 
-    background: var(--bg); 
-    border-radius: 14px; 
-    padding: 4px 10px; 
+.st-key-reslist{
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 10px;
     margin-top: 18px;
-    height: auto !important; 
-    max-height: 330px !important; 
+    height: auto !important;
+    max-height: 330px !important;
     overflow-y: auto !important;
 }
-.st-key-favlist{ 
-    background: var(--bg); 
-    border-radius: 14px; 
-    padding: 4px 10px; 
+.st-key-favlist{
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 10px;
     margin-top: 18px;
-    height: auto !important; 
-    max-height: 330px !important; 
+    height: auto !important;
+    max-height: 330px !important;
     overflow-y: auto !important;
 }
 [class*="st-key-row_"], [class*="st-key-hrow_"]{ border-bottom:1px solid #E1E4E8; }
@@ -338,21 +339,21 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .stToggle label p{ font-size:15px; color:var(--ink); }
 
 /* 결과 화면 버튼 우측 정렬 및 크기 조절 */
-.st-key-btn_report, 
+.st-key-btn_report,
 [class*="st-key-light_"] {
     display: flex !important;
     justify-content: flex-end !important;
     width: 100% !important;
 }
 
-.st-key-btn_report .stButton, 
+.st-key-btn_report .stButton,
 [class*="st-key-light_"] .stButton {
     display: flex !important;
     justify-content: flex-end !important;
     width: 100% !important;
 }
 
-.st-key-btn_report .stButton > button, 
+.st-key-btn_report .stButton > button,
 [class*="st-key-light_"] .stButton > button {
     margin-left: auto !important;
     margin-right: 0 !important;
@@ -640,14 +641,39 @@ def search_drugs(q, limit=50):
 
 
 # =========================================================
-# OCR (A파일 방식 + 못 읽으면 보정 사진으로 다시 읽기)
+# OCR 엔진 (Tesseract 한글 우선 + EasyOCR 보조)
+#  - 실제 포장지 사진 7종(원본·작게·흐림·기울어짐·어두움·저화질·폰 사진) 측정 결과
+#    EasyOCR만: 성분 5/7, 장당 약 60초 / Tesseract 3종 합침: 성분 7/7, 장당 약 9초
+#  - Tesseract가 설치돼 있지 않으면 자동으로 EasyOCR만 사용
 # =========================================================
-MAX_SIDE = 2000   # 사진 최대 크기
-MIN_SIDE = 1600   # 이보다 작으면 키워서 작은 글씨도 읽히게
+try:
+    import pytesseract
+    pytesseract.get_tesseract_version()
+    _langs = pytesseract.get_languages(config="")
+    HAS_TESS = "kor" in _langs
+except Exception:
+    pytesseract = None
+    HAS_TESS = False
+
+TESS_SIDE = 2400  # Tesseract에 넣을 사진 크기 (작은 글씨가 충분히 커지는 크기)
+MAX_SIDE = 2000   # EasyOCR에 넣을 최대 크기
+MIN_SIDE = 1600   # EasyOCR: 이보다 작으면 키워서 읽음
 MAG_RATIO = 1.0
-MIN_CONF = 0.1    # 긴 줄은 확신도가 낮아도 살림 (한글은 맞게 읽어도 확신도가 낮게 나오는 경우가 많음)
-SHORT_CONF = 0.4  # 3글자 이하 짧은 조각은 이 이상일 때만 살림 (짧은 조각은 대부분 잘못 읽은 것)
+MIN_CONF = 0.1    # 긴 줄은 확신도가 낮아도 살림
+SHORT_CONF = 0.4  # 3글자 이하 짧은 조각은 이 이상일 때만 살림
 SHOW_CONF = 0.3   # '인식된 텍스트 보기'에는 이 이상만 보여줌 (판정에는 전부 사용)
+
+
+def ocr_plan(precise):
+    """읽는 순서. 앞 단계에서 정품이 확인되면 바로 멈춤"""
+    stages = []
+    if HAS_TESS:
+        stages.append(["t_sharp", "t_otsu", "t_clahe"])   # 빠르고 한글에 강함 (3개 합쳐서 판정)
+        easy = ["e_plain", "e_enh"] if precise else ["e_plain"]
+    else:
+        easy = ["e_plain", "e_enh", "e_bin"] if precise else ["e_plain"]
+    stages += [[v] for v in easy]                          # 그래도 안 되면 EasyOCR로 보충
+    return stages
 
 
 @st.cache_resource(show_spinner=False)
@@ -658,56 +684,139 @@ def get_ocr_reader():
         return easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
 
 
-def preprocess(pil_img, variant):
-    """variant 0: 원본(크기만 맞춤) / 1: 대비·선명도 보정 / 2: 그림자 제거 + 흑백"""
-    pil_img = ImageOps.exif_transpose(pil_img)
-    img = np.array(pil_img.convert("RGB"))
-    h, w = img.shape[:2]
-    long_side = max(h, w)
-    if long_side > MAX_SIDE:
-        scale = MAX_SIDE / long_side
-        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-    elif long_side < MIN_SIDE:
-        scale = MIN_SIDE / long_side
-        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
-    if variant == 0:
-        return img
+def _load_rgb(data):
+    return np.array(ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB"))
 
+
+def _resize_to(img, target, only_up=False, only_down=False):
+    h, w = img.shape[:2]
+    s = target / float(max(h, w))
+    if (only_up and s <= 1) or (only_down and s >= 1) or abs(s - 1) < 0.05:
+        return img
+    return cv2.resize(img, (int(w * s), int(h * s)),
+                      interpolation=cv2.INTER_CUBIC if s > 1 else cv2.INTER_AREA)
+
+
+def _deskew(gray):
+    """글자 줄이 조금 기울어진 사진을 바로 세움 (최대 ±15도)"""
+    try:
+        inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+        inv = cv2.dilate(inv, cv2.getStructuringElement(cv2.MORPH_RECT, (25, 3)))
+        lines = cv2.HoughLinesP(inv, 1, np.pi / 360, threshold=200,
+                                minLineLength=gray.shape[1] // 4, maxLineGap=20)
+        if lines is None:
+            return gray
+        angles = []
+        for x1, y1, x2, y2 in lines[:, 0]:
+            if x2 != x1:
+                a = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                if abs(a) <= 15:
+                    angles.append(a)
+        if len(angles) < 3:
+            return gray
+        ang = float(np.median(angles))
+        if abs(ang) < 0.7:
+            return gray
+        h, w = gray.shape
+        m = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
+        return cv2.warpAffine(gray, m, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    except Exception:
+        return gray
+
+
+def _tess_image(data, variant):
+    gray = cv2.cvtColor(_resize_to(_load_rgb(data), TESS_SIDE), cv2.COLOR_RGB2GRAY)
+    gray = _deskew(gray)
+    g = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    if variant == "t_sharp":
+        bl = cv2.GaussianBlur(g, (0, 0), 2.0)
+        return cv2.addWeighted(g, 1.8, bl, -0.8, 0)
+    if variant == "t_otsu":
+        return cv2.threshold(g, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    return g
+
+
+def _tess_read(img):
+    """Tesseract로 읽고 줄 단위로 묶어서 [글자, 확신도] 리스트로"""
+    d = pytesseract.image_to_data(img, lang="kor+eng", config="--oem 1 --psm 11",
+                                  output_type=pytesseract.Output.DICT)
+    rows = {}
+    for i, word in enumerate(d["text"]):
+        word = (word or "").strip()
+        try:
+            conf = float(d["conf"][i])
+        except (TypeError, ValueError):
+            conf = -1
+        if not word or conf < 0:
+            continue
+        key = (d["block_num"][i], d["par_num"][i], d["line_num"][i])
+        rows.setdefault(key, []).append((word, conf))
+    out = []
+    for key in sorted(rows):
+        words = rows[key]
+        text = " ".join(w for w, _ in words)
+        # Tesseract는 한글을 '아 세 트 아 미 노 펜'처럼 한 글자씩 띄워 읽기도 해서, 그럴 땐 붙여서 보여줌
+        singles = sum(1 for w, _ in words if len(w) == 1 and re.match(r"[가-힣]", w))
+        if len(words) >= 3 and singles >= len(words) * 0.5:
+            text = re.sub(r"(?<=[가-힣]) (?=[가-힣])", "", text)
+        conf = sum(c for _, c in words) / len(words) / 100.0
+        out.append([text, conf])
+    return out
+
+
+def _easy_image(data, variant):
+    img = _load_rgb(data)
+    h, w = img.shape[:2]
+    if max(h, w) > MAX_SIDE:
+        img = _resize_to(img, MAX_SIDE)
+    elif max(h, w) < MIN_SIDE:
+        img = _resize_to(img, MIN_SIDE)
+    if variant == "e_plain":
+        return img
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    if variant == 1:
+    if variant == "e_enh":
         clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
         den = cv2.fastNlMeansDenoising(clahe, h=7)
         blur = cv2.GaussianBlur(den, (0, 0), 1.2)
         return cv2.addWeighted(den, 1.6, blur, -0.6, 0)
-
-    bg = cv2.morphologyEx(gray, cv2.MORPH_CLOSE,
-                          cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
+    bg = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)))
     flat = cv2.divide(gray, bg, scale=255)
-    _, binar = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return binar
+    return cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
 
-@st.cache_data(show_spinner=False, max_entries=64)
+def _keep(text, conf):
+    n = len(norm(text))
+    return n >= 2 and conf >= MIN_CONF and (n > 3 or conf >= SHORT_CONF)
+
+
+@st.cache_data(show_spinner=False, max_entries=96)
 def ocr_pass(data, variant, precise, rotate):
-    reader = get_ocr_reader()
-    kw = dict(detail=1, mag_ratio=MAG_RATIO, paragraph=False,
-              text_threshold=0.6, low_text=0.3, contrast_ths=0.1, adjust_contrast=0.6)
-    if variant >= 1 and precise:
-        kw.update(decoder="beamsearch", beamWidth=5)
-    if rotate:
-        kw["rotation_info"] = [90, 270]
-    img = preprocess(Image.open(io.BytesIO(data)), variant)
+    """사진 한 장을 한 가지 방식으로 읽기 -> [[글자, 확신도], ...]"""
     out = []
     sink = io.StringIO()
     with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-        for _, text, conf in reader.readtext(img, **kw):
-            text = text.strip()
-            n = len(norm(text))
-            if n < 2:
-                continue
-            if conf >= MIN_CONF and (n > 3 or conf >= SHORT_CONF):
-                out.append([text, float(conf)])
-    del img
+        if variant.startswith("t_"):
+            img = _tess_image(data, variant)
+            imgs = [img]
+            if rotate:
+                imgs += [cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE), cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)]
+            for im in imgs:
+                for text, conf in _tess_read(im):
+                    # Tesseract는 한글 확신도가 낮게 나오는 편이라 긴 줄은 살리고 짧은 조각만 거름
+                    if len(norm(text)) >= 2 and (len(norm(text)) > 3 or conf >= SHORT_CONF):
+                        out.append([text, conf])
+        else:
+            kw = dict(detail=1, mag_ratio=MAG_RATIO, paragraph=False,
+                      text_threshold=0.6, low_text=0.3, contrast_ths=0.1, adjust_contrast=0.6)
+            if variant != "e_plain":
+                kw.update(decoder="beamsearch", beamWidth=5)
+            if rotate:
+                kw["rotation_info"] = [90, 270]
+            img = _easy_image(data, variant)
+            for _, text, conf in get_ocr_reader().readtext(img, **kw):
+                text = text.strip()
+                if _keep(text, conf):
+                    out.append([text, float(conf)])
     gc.collect()
     return out
 
@@ -719,8 +828,66 @@ def merge_lines(merged, lines):
             merged[k] = [text, conf]
 
 
+# =========================================================
+# 판정
+# =========================================================
+_DOSE_RE = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*(mg|mq|밀리그램|㎎|mcg|μg|ug|마이크로그램|g|그램|ml|밀리리터|㎖|iu)",
+    re.I)
+_DOSE_UNIT = {"mg": "mg", "mq": "mg", "밀리그램": "mg", "㎎": "mg",
+              "mcg": "mcg", "μg": "mcg", "ug": "mcg", "마이크로그램": "mcg",
+              "g": "g", "그램": "g", "ml": "ml", "밀리리터": "ml", "㎖": "ml", "iu": "iu"}
+
+
+def doses_in(text):
+    """글자에서 함량 찾기: '500밀리그램', '500mg', '5OOmg'(O를 0으로 잘못 읽은 것)도 같은 500mg"""
+    t = str(text)
+    for _ in range(2):
+        t = re.sub(r"(?<=\d)[Oo]|[Oo](?=\d)", "0", t)
+    out = set()
+    for num, unit in _DOSE_RE.findall(t):
+        try:
+            val = float(num.replace(",", ""))
+        except ValueError:
+            continue
+        unit = _DOSE_UNIT[unit.lower()]
+        if unit == "g":                      # 4그램 = 4000mg 처럼 단위 통일
+            val, unit = val * 1000, "mg"
+        out.add((val, unit))
+    return out
+
+
+def _stem(name):
+    """제품명에서 함량·제형을 뺀 이름 (같은 약의 다른 함량을 찾기 위함)"""
+    k = norm(_UNIT_RE.sub(" ", re.sub(r"\(.*?\)", " ", str(name))))
+    return _FORM_RE.sub("", k)
+
+
+@st.cache_data(show_spinner=False, max_entries=256)
+def sibling_doses(name, ingredient):
+    """DB에서 같은 성분·비슷한 이름인데 함량만 다른 약들의 함량 (예: 타이레놀 500 <-> 650)"""
+    try:
+        db = DF
+    except NameError:
+        return frozenset()
+    my_ing = norm(ingredient)
+    my_stem = _stem(name)[:3]
+    if not my_ing or len(my_stem) < 2:
+        return frozenset()
+    same = db[(db["주성분"].map(norm) == my_ing) & (db["약품명"].map(lambda x: _stem(x)[:3]) == my_stem)]
+    out = set()
+    for nm, ing in zip(same["약품명"], same["주성분"]):
+        if nm != name:
+            out |= doses_in(nm) | doses_in(ing)
+    return frozenset(out)
+
+
 def evaluate(drug, lines):
-    """제품명 + 주성분으로 판정 (제조사·코드는 리포트 참고용)"""
+    """판정: 주성분이 맞고, 다음 중 하나면 정품
+       - 제품명이 사진에 있음
+       - 제품명은 없지만(성분표 면) 함량이 맞음
+       - 함량도 안 읽혔지만, 같은 약의 '다른 함량'이 사진에 보이지 않음
+       제조사·코드는 리포트 참고용"""
     texts = [t for t, _ in lines]
     full = norm(" ".join(texts))
 
@@ -731,7 +898,6 @@ def evaluate(drug, lines):
     for ing in ingrs:
         sc, line, hit = best_match(ingr_candidates(ing), texts, full, INGR_PASS)
         # 있다고 판정된 성분은 같은 성분이므로 100%(남은 차이는 사진 판독 오타일 뿐)
-        # 못 찾은 성분은 실제 점수를 보여주되, 리포트의 '일치'(80%) 표시와 어긋나지 않게 80 미만으로
         shown = 100.0 if hit else min(sc, INGR_PASS - 1)
         per.append({"name": ing, "score": shown / 100.0, "raw": sc, "found": line if sc >= 60 else "", "hit": hit})
     n_hit = sum(1 for p in per if p["hit"])
@@ -742,13 +908,27 @@ def evaluate(drug, lines):
     mn = norm(drug["manufacturer"])
     m_sc, m_line, _ = best_match([mn], texts, full, STRICT) if mn else (0.0, "", False)
 
+    my_doses = doses_in(drug["name"]) | doses_in(drug["ingredient"])
+    photo_doses = doses_in(" ".join(texts))
+    dose_ok = bool(my_doses & photo_doses) if my_doses else None
+    other = set(sibling_doses(drug["name"], drug["ingredient"])) - my_doses
+    dose_conflict = bool(other & photo_doses) and not dose_ok
+
+    if name_ok:
+        genuine = ing_ok and not dose_conflict
+    elif dose_ok:
+        genuine = ing_ok
+    else:
+        genuine = ing_ok and not dose_conflict
+
     code = re.sub(r"\D", "", drug["code"]) if has_code(drug["code"]) else ""
     code_ok = len(code) >= 6 and code in digit_stream(" ".join(texts))
 
     return {
         "drug": drug, "per": per, "ing_ok": ing_ok, "code_ok": code_ok,
         "manuf_score": m_sc / 100.0, "manuf_found": m_line if m_sc >= 60 else "",
-        "rate": avg, "genuine": name_ok and ing_ok,
+        "rate": avg, "genuine": genuine,
+        "name_ok": name_ok, "dose_ok": dose_ok, "dose_conflict": dose_conflict,
         "lines": [ln for ln in lines if ln[1] >= SHOW_CONF],
         "time": datetime.now().strftime("%m.%d %H:%M"),
     }
@@ -1029,9 +1209,10 @@ def page_analyzing():
     result, error = None, ""
     try:
         merged = {}
-        for variant in ((0, 1, 2) if ss.precise else (0,)):
-            for file in ss.files:
-                merge_lines(merged, ocr_pass(file["data"], variant, ss.precise, ss.rotate))
+        for stage in ocr_plan(ss.precise):
+            for variant in stage:
+                for file in ss.files:
+                    merge_lines(merged, ocr_pass(file["data"], variant, ss.precise, ss.rotate))
             result = evaluate(ss.applied, list(merged.values()))
             if result["genuine"]:
                 break
