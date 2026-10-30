@@ -188,7 +188,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     background: var(--bg); 
     border-radius: 14px; 
     padding: 4px 10px; 
-    margin-top: 5px;
+    margin-top: 18px;
     height: auto !important; 
     max-height: 330px !important; 
     overflow-y: auto !important;
@@ -197,7 +197,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     background: var(--bg); 
     border-radius: 14px; 
     padding: 4px 10px; 
-    margin-top: 5px;
+    margin-top: 18px;
     height: auto !important; 
     max-height: 330px !important; 
     overflow-y: auto !important;
