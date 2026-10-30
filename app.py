@@ -22,13 +22,25 @@ try:
 except Exception as e:
     st.error(f"OCR 엔진 로딩 실패: {e}")
 
-# 2. drugs.csv 파일 로드 (인코딩 자동 대응)
+# 2. drugs.csv 파일 로드 및 전처리 (공백 및 중복 완벽 제거)
 @st.cache_data
 def load_drug_data():
     try:
         df = pd.read_csv('drugs.csv', encoding='utf-8')
     except UnicodeDecodeError:
         df = pd.read_csv('drugs.csv', encoding='cp949')
+    
+    # ★ 컬럼 이름 양쪽 공백 제거 (KeyError 방지)
+    df.columns = df.columns.str.strip()
+    
+    # ★ 모든 문자열 데이터의 앞뒤 공백 제거
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].astype(str).str.strip()
+        
+    # ★ 제품명 기준 중복 데이터 깔끔하게 제거
+    if 'Product Name' in df.columns:
+        df = df.drop_duplicates(subset=['Product Name']).reset_index(drop=True)
+        
     return df
 
 try:
@@ -50,11 +62,10 @@ if 'applied_drug' not in st.session_state:
 # ==========================================
 st.header("Step 1. 기준 의약품 검색 및 적용")
 
-# ★ CSV 헤더 구조에 맞춘 컬럼명 매핑 (실제 CSV 컬럼 이름에 맞춤)
-col_name_key = "Product Name"     # 제품명 컬럼
-ingredient_key = "Active Ingredient"  # 주성분 컬럼
-manuf_key = "Manufacturer"        # 제조사 컬럼
-code_key = "MTRAL_CC"             # 품목기준코드/원료코드 컬럼
+col_name_key = "Product Name"         
+ingredient_key = "Active Ingredient"  
+manuf_key = "Manufacturer"            
+code_key = "MTRAL_CC"                 
 
 col_search1, col_search2 = st.columns([3, 1])
 
@@ -64,8 +75,8 @@ with col_search1:
 # 데이터 필터링
 if search_query:
     matched_df = df_drugs[
-        df_drugs[col_name_key].astype(str).str.contains(search_query, case=False, na=False) | 
-        df_drugs[ingredient_key].astype(str).str.contains(search_query, case=False, na=False)
+        df_drugs[col_name_key].str.contains(search_query, case=False, na=False) | 
+        df_drugs[ingredient_key].str.contains(search_query, case=False, na=False)
     ]
 else:
     matched_df = df_drugs
@@ -83,11 +94,12 @@ if apply_btn:
     if not matched_df.empty and selected_drug_name != "검색 결과 없음":
         selected_row = matched_df[matched_df[col_name_key] == selected_drug_name].iloc[0]
         
+        # 안전하게 `.get()` 메서드를 사용하여 KeyError 원천 차단
         st.session_state.applied_drug = {
-            "약품명": str(selected_row[col_name_key]),
-            "주성분": str(selected_row[ingredient_key]),
+            "약품명": str(selected_row.get(col_name_key, "")),
+            "주성분": str(selected_row.get(ingredient_key, "")),
             "제조사": str(selected_row.get(manuf_key, "")),
-            "품목기준코드": str(selected_row[code_key])
+            "품목기준코드": str(selected_row.get(code_key, ""))
         }
         st.success(f"'{selected_drug_name}' 정품 기준 데이터가 성공적으로 적용되었습니다!")
     else:
@@ -146,15 +158,13 @@ if uploaded_file is not None:
         target_code = target_drug["품목기준코드"]
         target_ingredient = target_drug["주성분"]
         
-        # 텍스트 매칭 유연화
         clean_full_text = full_raw_text.replace(" ", "").lower()
         clean_target_ing = target_ingredient.replace(" ", "").lower()
         clean_target_code = target_code.replace(" ", "").lower()
         
-        is_code_matched = clean_target_code in clean_full_text
-        is_ingredient_matched = clean_target_ing in clean_full_text
+        is_code_matched = clean_target_code in clean_full_text if clean_target_code else False
+        is_ingredient_matched = clean_target_ing in clean_full_text if clean_target_ing else False
         
-        # 판정 로직
         if is_code_matched or is_ingredient_matched:
             match_score = 98.5
             is_genuine = True
