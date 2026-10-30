@@ -88,27 +88,66 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   background:var(--red-d) !important; color:#fff !important;
 }
 
-/* 검색 줄: 입력창 + 오른쪽 검색 버튼 */
-[data-testid="stForm"]{ border:none !important; padding:0 !important; }
-.st-key-searchrow, .st-key-searchrow [data-testid="stForm"],
-.st-key-searchrow [data-testid="stHorizontalBlock"]{ width:100% !important; }
-.st-key-searchrow [data-testid="stHorizontalBlock"]{ align-items:center; }
-.st-key-searchrow .stTextInput{ width:100% !important; }
+/* 검색 폼 영역 정렬 */
+[data-testid="stForm"]{ 
+    border: none !important; 
+    padding: 0 !important; 
+}
+
+/* 검색창과 버튼을 감싸는 블록을 가로로 정렬하고 높이 맞추기 */
+.st-key-searchrow [data-testid="stHorizontalBlock"]{ 
+    display: flex !important;
+    align-items: flex-end !important; /* 아래쪽 라인에 딱 맞춤 */
+    gap: 8px !important;
+}
+
+/* 입력창 크기 및 스타일 */
+.stTextInput {
+    width: 100% !important;
+}
 .stTextInput [data-baseweb="input"]{
-  height:52px; border:none !important; border-radius:12px;
-  background:var(--bg) !important; box-shadow:none !important;
+    height: 52px !important; 
+    border: 1.5px solid var(--line) !important; 
+    border-radius: 12px !important;
+    background: #fff !important; 
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
 }
-.stTextInput [data-baseweb="input"] > div,
-.stTextInput [data-baseweb="base-input"]{ background:transparent !important; border:none !important; }
+.stTextInput [data-baseweb="input"]:focus-within{ 
+    border-color: var(--ink) !important; 
+}
 .stTextInput input{
-  font-size:16px; color:var(--ink); padding:0 14px;
-  background:transparent !important; border:none !important; box-shadow:none !important; outline:none !important;
+    font-size: 16px !important; 
+    color: var(--ink) !important; 
+    padding: 0 14px !important;
+    background: transparent !important; 
+    border: none !important; 
+    outline: none !important;
 }
-.stTextInput input::placeholder{ color:#A3ABB5; }
-.stTextInput [data-baseweb="input"]:focus-within{ box-shadow:inset 0 0 0 1.5px #C4CAD1 !important; }
-.st-key-searchrow .stFormSubmitButton{ width:100% !important; }
+.stTextInput input::placeholder{ color: #B0B8C1 !important; }
+
+/* 오른쪽 빨간색 검색 버튼 높이와 모양 맞추기 */
+.st-key-searchrow .stFormSubmitButton {
+    width: auto !important;
+}
 .st-key-searchrow .stFormSubmitButton > button{
-  width:100% !important; min-height:52px; height:52px; font-size:16px; padding:0 8px; white-space:nowrap;
+    width: 80px !important; /* 버튼 가로폭 고정 */
+    min-height: 52px !important; 
+    height: 52px !important; 
+    border-radius: 12px !important;
+    font-size: 15px !important; 
+    font-weight: 600 !important;
+    background: var(--red) !important; 
+    color: #fff !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+.st-key-searchrow .stFormSubmitButton > button:hover{
+    background: var(--red-d) !important;
 }
 
 /* 상단바: 아이콘과 글씨를 한 버튼에 넣어 정렬 */
