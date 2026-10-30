@@ -188,7 +188,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     background: var(--bg); 
     border-radius: 14px; 
     padding: 4px 10px; 
-    margin-top: 12px;
+    margin-top: 5px;
     height: auto !important; 
     max-height: 330px !important; 
     overflow-y: auto !important;
@@ -197,7 +197,7 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
     background: var(--bg); 
     border-radius: 14px; 
     padding: 4px 10px; 
-    margin-top: 12px;
+    margin-top: 5px;
     height: auto !important; 
     max-height: 330px !important; 
     overflow-y: auto !important;
@@ -881,7 +881,7 @@ def page_home():
                 '<div class="sec"><b>검색된 약품 목록 %d</b><small>%s</small></div>' % (ss.total, more),
                 unsafe_allow_html=True,
             )
-            with st.container(height=330, border=False, key="reslist"):
+            with st.container(border=False, key="reslist"):
                 for i, rec in enumerate(ss.results):
                     drug_row(rec, i, "")
 
