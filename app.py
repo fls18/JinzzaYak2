@@ -725,13 +725,14 @@ def evaluate(drug, lines):
     ingrs = [i.strip() for i in str(drug["ingredient"]).split(",") if i.strip()]
     for ing in ingrs:
         sc, line, hit = best_match(ingr_candidates(ing), texts, full, INGR_PASS)
-        # 리포트는 80% 이상을 '일치'로 표시하므로, 길이 기준을 못 넘으면 80 미만으로 맞춰 표시가 어긋나지 않게
-        shown = sc if hit else min(sc, INGR_PASS - 1)
+        # 있다고 판정된 성분은 같은 성분이므로 100%(남은 차이는 사진 판독 오타일 뿐)
+        # 못 찾은 성분은 실제 점수를 보여주되, 리포트의 '일치'(80%) 표시와 어긋나지 않게 80 미만으로
+        shown = 100.0 if hit else min(sc, INGR_PASS - 1)
         per.append({"name": ing, "score": shown / 100.0, "raw": sc, "found": line if sc >= 60 else "", "hit": hit})
     n_hit = sum(1 for p in per if p["hit"])
     ratio = n_hit / len(per) if per else 0.0
     ing_ok = bool(per) and ratio >= INGR_RATIO
-    avg = sum(p["raw"] for p in per) / len(per) if per else 0.0
+    avg = sum(p["score"] for p in per) / len(per) * 100 if per else 0.0
 
     mn = norm(drug["manufacturer"])
     m_sc, m_line, _ = best_match([mn], texts, full, STRICT) if mn else (0.0, "", False)
