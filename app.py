@@ -401,11 +401,10 @@ def search_drugs(q: str, limit=50):
     return [to_rec(r) for _, r in hit.head(limit).iterrows()], len(hit)
 
 # =========================================================
-# OCR
+# OCR (Streamlit Cloud 환경 최적화 안전 로딩)
 # =========================================================
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=True)
 def get_ocr_reader():
-    import easyur # 또는 easyocr
     import easyocr
     return easyocr.Reader(["ko", "en"], gpu=False)
 
@@ -636,8 +635,8 @@ def bottom_nav(active):
         for col, (pg, label, icon) in zip(cols, items):
             with col:
                 st.button(label, icon=icon, key=f"nav_{pg}",
-                          type="primary" if pg == active else "secondary",
-                          on_click=go, args=(pg,))
+                        type="primary" if pg == active else "secondary",
+                        on_click=go, args=(pg,))
 
 def drug_row(rec, i, prefix):
     on = is_bookmarked(rec["name"])
@@ -831,7 +830,7 @@ def page_report():
         <thead><tr><th>검증 항목</th><th>기준 DB (정품)</th><th>이미지 OCR 검출값</th><th>검증 결과</th></tr></thead>
         <tbody>{body}</tbody></table>
         <div class="fine">사진 속 글자 인식(OCR) 결과를 기준 데이터와 비교한 참고용 판정입니다.
-        조명·초점에 따라 결과가 달라질 수 있으니, 의심되면 약사 또는 의약품안전나라에서 한 번 더 확인해주세요.</div>''',
+        조명·초점에 따라 달라질 수 있으니, 의심되면 약사 또는 의약품안전나라에서 한 번 더 확인해주세요.</div>''',
         unsafe_allow_html=True)
 
     with st.expander(f"인식된 텍스트 보기 ({len(r['lines'])}줄)"):
