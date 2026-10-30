@@ -367,9 +367,9 @@ st.markdown(CSS, unsafe_allow_html=True)
 # 판별 로직 (A파일 기준: rapidfuzz 점수, 75점 / 50% 규칙)
 # =========================================================
 STRICT = 90        # 제조사 점수가 이 이상이면 '검출' (리포트 참고용)
-INGR_PASS = 75     # 성분 하나가 '있다'고 인정할 점수
+INGR_PASS = 80     # 성분 하나가 '있다'고 인정할 점수 (리포트의 '일치' 표시 기준과 같음)
 INGR_RATIO = 0.5   # 성분 중 이 비율 이상 확인되어야 통과
-NAME_PASS = 75     # 제품명이 '있다'고 인정할 점수
+NAME_PASS = 80     # 제품명이 '있다'고 인정할 점수
 
 COLUMN_MAP = {"Product Name": "약품명", "Active Ingredient": "주성분",
               "Manufacturer": "제조사", "MTRAL_CC": "코드"}
@@ -388,13 +388,63 @@ def make_key(name):
     return norm(re.sub(r"\(.*?\)", "", str(name)))
 
 
-def match_score(target, texts, full):
-    """OCR 오타를 고려해서 target이 사진 속 글자에 있는지 점수(0~100)"""
+_CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+_JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+_JONG = [""] + list("ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ")
+
+
+def jamo(s):
+    """한글을 자모로 풀어서 비교 (예: '미'와 '마'는 모음 하나만 다른 것으로 계산)"""
+    out = []
+    for ch in s:
+        c = ord(ch) - 0xAC00
+        if 0 <= c < 11172:
+            out.append(_CHO[c // 588])
+            out.append(_JUNG[(c % 588) // 28])
+            out.append(_JONG[c % 28])
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _line_pool(texts):
+    """사진에서 읽은 줄들 + 이웃한 두 줄을 이은 것 (한 단어가 두 칸으로 쪼개져 읽힌 경우 대비)"""
+    lines = [(x, jamo(norm(x))) for x in texts if norm(x)]
+    pool = list(lines)
+    for i in range(len(lines) - 1):
+        pool.append((lines[i][0] + " " + lines[i + 1][0], lines[i][1] + lines[i + 1][1]))
+    return pool
+
+
+def _score_in_pool(t, pool):
+    """t(자모)와 가장 잘 맞는 줄의 점수와 그 줄"""
+    best, best_line = 0.0, ""
+    for orig, x in pool:
+        if len(x) >= len(t):
+            sc = fuzz.partial_ratio(t, x)     # 줄 안에 들어있는지
+        else:
+            sc = fuzz.ratio(t, x)             # 줄이 더 짧으면 전체끼리 비교 (조각만 맞는 과대평가 방지)
+        if sc > best:
+            best, best_line = sc, orig
+    return best, best_line
+
+
+def required_score(target, base):
+    """짧은 이름은 우연히 맞기 쉬워서 더 엄격하게: 3글자 이하 95점, 4~5글자 88점"""
+    n = len(norm(target))
+    if n <= 3:
+        return max(base, 95)
+    if n <= 5:
+        return max(base, 88)
+    return base
+
+
+def match_score(target, texts, full=None):
+    """OCR 오타를 고려해서 target이 사진 속 글자에 있는지 점수(0~100, 소수점까지)"""
     t = norm(target)
     if not t:
-        return 0
-    line_scores = [fuzz.ratio(t, norm(x)) for x in texts if norm(x)]
-    return max(line_scores + [fuzz.partial_ratio(t, full)])
+        return 0.0
+    return _score_in_pool(jamo(t), _line_pool(texts))[0]
 
 
 def merge_ingr(series):
@@ -485,17 +535,19 @@ def name_candidates(name):
     return list(dict.fromkeys(out))
 
 
-def best_match(cands, texts, full):
-    """여러 표기 중 가장 높은 점수와, 사진에서 가장 비슷한 글자 줄"""
-    score = max([match_score(c, texts, full) for c in cands] + [0])
-    best, line = 0, ""
+def best_match(cands, texts, full=None, base=INGR_PASS):
+    """여러 표기 중 가장 잘 맞는 것: (점수, 사진 속 줄, 통과 여부)"""
+    pool = _line_pool(texts)
+    best, line, passed = 0.0, "", False
     for c in cands:
-        for x in texts:
-            if norm(x):
-                s = fuzz.partial_ratio(c, norm(x))
-                if s > best:
-                    best, line = s, x
-    return score, line
+        if not c:
+            continue
+        sc, ln = _score_in_pool(jamo(c), pool)
+        if sc >= required_score(c, base):
+            passed = True
+        if sc > best:
+            best, line = sc, ln
+    return best, line, passed
 
 
 _CONFUSE = str.maketrans("OoDQIil|SsBZz", "0000111155822")
@@ -667,19 +719,22 @@ def evaluate(drug, lines):
     texts = [t for t, _ in lines]
     full = norm(" ".join(texts))
 
-    name_sc, _ = best_match(name_candidates(drug["name"]), texts, full)
-    name_ok = name_sc >= NAME_PASS
+    name_sc, _, name_ok = best_match(name_candidates(drug["name"]), texts, full, NAME_PASS)
 
     per = []
     ingrs = [i.strip() for i in str(drug["ingredient"]).split(",") if i.strip()]
     for ing in ingrs:
-        sc, line = best_match(ingr_candidates(ing), texts, full)
-        per.append({"name": ing, "score": sc / 100.0, "found": line if sc >= 60 else ""})
-    n_hit = sum(1 for p in per if p["score"] * 100 >= INGR_PASS)
+        sc, line, hit = best_match(ingr_candidates(ing), texts, full, INGR_PASS)
+        # 리포트는 80% 이상을 '일치'로 표시하므로, 길이 기준을 못 넘으면 80 미만으로 맞춰 표시가 어긋나지 않게
+        shown = sc if hit else min(sc, INGR_PASS - 1)
+        per.append({"name": ing, "score": shown / 100.0, "raw": sc, "found": line if sc >= 60 else "", "hit": hit})
+    n_hit = sum(1 for p in per if p["hit"])
     ratio = n_hit / len(per) if per else 0.0
     ing_ok = bool(per) and ratio >= INGR_RATIO
+    avg = sum(p["raw"] for p in per) / len(per) if per else 0.0
 
-    m_sc, m_line = best_match([norm(drug["manufacturer"])], texts, full) if norm(drug["manufacturer"]) else (0, "")
+    mn = norm(drug["manufacturer"])
+    m_sc, m_line, _ = best_match([mn], texts, full, STRICT) if mn else (0.0, "", False)
 
     code = re.sub(r"\D", "", drug["code"]) if has_code(drug["code"]) else ""
     code_ok = len(code) >= 6 and code in digit_stream(" ".join(texts))
@@ -687,7 +742,7 @@ def evaluate(drug, lines):
     return {
         "drug": drug, "per": per, "ing_ok": ing_ok, "code_ok": code_ok,
         "manuf_score": m_sc / 100.0, "manuf_found": m_line if m_sc >= 60 else "",
-        "rate": ratio * 100, "genuine": name_ok and ing_ok,
+        "rate": avg, "genuine": name_ok and ing_ok,
         "lines": lines, "time": datetime.now().strftime("%m.%d %H:%M"),
     }
 
