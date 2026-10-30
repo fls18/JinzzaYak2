@@ -822,18 +822,6 @@ def topbar(title=None, back=None):
             st.button(title or "진짜약", icon=":material/menu:", key="tb_menu", on_click=toggle_menu)
 
 
-def bottom_nav(active):
-    items = [("home", "검색", ":material/search:"),
-             ("mymenu", "마이메뉴", ":material/person:")] # 즐겨찾기 제외
-    with st.container(key="bottomnav"):
-        cols = st.columns(2) # 3에서 2로 변경!
-        for col, (pg, label, icon) in zip(cols, items):
-            with col:
-                st.button(label, icon=icon, key="nav_" + pg,
-                          type="primary" if pg == active else "secondary",
-                          on_click=go, args=(pg,))
-
-
 def drug_row(rec, i, prefix):
     on = is_bookmarked(rec["name"])
     with st.container(key="row_%s%d" % (prefix, i)):
