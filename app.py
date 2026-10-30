@@ -862,8 +862,6 @@ def page_home():
         else:
             st.markdown('<div class="empty">최근 검색한 약품이 여기에 표시됩니다.</div>', unsafe_allow_html=True)
 
-    bottom_nav("home")
-
 
 def page_analyzing():
     if not ss.files or not ss.applied:
@@ -1033,7 +1031,6 @@ def page_favorites():
         with st.container(key="favlist"):
             for i, b in enumerate(ss.bookmarks):
                 drug_row(b, i, "f")
-    bottom_nav("favorites")
 
 
 def page_mymenu():
@@ -1045,8 +1042,7 @@ def page_mymenu():
         mark = "정품" if r["genuine"] else "가품 의심"
         with st.container(key="hrow_%d" % i):
             st.button("%s  ·  %s %.0f%%  ·  %s" % (r["drug"]["name"], mark, r["rate"], r["time"]),
-                      key="open_%d" % i, on_click=open_result, args=(r,))
-    bottom_nav("mymenu")
+                      key="open_%d" % i, on_click=open_result, args=(r,)
 
 
 def page_settings():
@@ -1065,7 +1061,6 @@ def page_settings():
         "기록과 즐겨찾기는 이 브라우저 세션 동안만 유지됩니다.</div>" % format(len(DF), ","),
         unsafe_allow_html=True,
     )
-    bottom_nav("mymenu")
 
 
 PAGES = {
